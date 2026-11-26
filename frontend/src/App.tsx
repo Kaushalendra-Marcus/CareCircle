@@ -12,12 +12,6 @@ const CAT_ICON: Record<string, string> = {
   other: "clipboard-list",
 };
 
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
-}
 function toLocalInput(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(
@@ -41,6 +35,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sheet, setSheet] = useState(false);
+  const [menu, setMenu] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -100,6 +95,11 @@ export default function App() {
   ];
   const me = members.find((m) => m.id === who)?.name ?? "family";
 
+  const go = (t: Tab) => {
+    setTab(t);
+    setMenu(false);
+  };
+
   return (
     <div className="site">
       <nav className="navbar">
@@ -111,38 +111,64 @@ export default function App() {
         </span>
         <div className="topnav">
           {tabs.map((t) => (
-            <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
-              <span className="ic">
-                <Icon name={t.icon} size={17} />
-              </span>
+            <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => go(t.id)}>
               {t.label}
             </button>
           ))}
         </div>
         <div className="nav-right">
-          <span className="nav-user">Helping as <b>{me}</b> · for {recipient}</span>
-          <div className="avatar">{recipient.slice(0, 1)}</div>
+          <button className="btn-solid-sm" onClick={() => setSheet(true)}>
+            <span className="ic">
+              <Icon name="plus" size={15} />
+            </span>
+            Add task
+          </button>
+          <button
+            className={`menu-toggle${menu ? " open" : ""}`}
+            onClick={() => setMenu((m) => !m)}
+            aria-expanded={menu}
+            aria-label="Menu"
+          >
+            <span />
+            <span />
+          </button>
         </div>
       </nav>
+      {menu && (
+        <div className="mobile-menu">
+          {tabs.map((t) => (
+            <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => go(t.id)}>
+              <span className="ic">
+                <Icon name={t.icon} size={19} />
+              </span>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <header className="topbar">
         <div>
-          <div className="greet">
-            <span className="ic">
-              <Icon name="sun" size={16} />
-            </span>{" "}
-            {greeting()}, <b>{me}</b>
-          </div>
+          <p className="hero-eyebrow">
+            CareCircle for <b>{recipient}</b> · Helping as <b>{me}</b>
+          </p>
           <h1 className="plan">
             {tab === "today"
-              ? "Today's Plan"
+              ? "Today's Plan."
               : tab === "meds"
-              ? "Medications"
+              ? "Medications."
               : tab === "activity"
-              ? "Activity"
-              : "Family"}
+              ? "Activity."
+              : "Family."}
           </h1>
           <p className="date-line">
+            {tab === "today"
+              ? "What needs doing, what's done, and who's helping — at a glance."
+              : tab === "meds"
+              ? "Every dose for today, with adherence as you go."
+              : tab === "activity"
+              ? "Everything the family completed today."
+              : "Everyone sharing the care."}{" "}
             {today ? prettyDate(today.date + "T12:00:00") : ""}
           </p>
         </div>
@@ -188,10 +214,46 @@ export default function App() {
       </nav>
 
       <footer className="site-foot">
-        <span className="ic">
-          <Icon name="heart" size={15} />
-        </span>{" "}
-        CareCircle Lite · one shared place for {recipient}'s care
+        <div className="foot-grid">
+          <div>
+            <div className="foot-brand">
+              <span className="brand-mark" style={{ width: 26, height: 26 }}>
+                <Icon name="activity" size={15} />
+              </span>
+              CareCircle
+            </div>
+            <p className="foot-tag">One shared place for the family's care.</p>
+          </div>
+          <div className="foot-col">
+            <p className="foot-h">Care</p>
+            {tabs.map((t) => (
+              <button key={t.id} onClick={() => go(t.id)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="foot-col">
+            <p className="foot-h">Family</p>
+            {members.map((m) => (
+              <button key={m.id} onClick={() => { setWho(m.id); go("today"); }}>
+                {m.name}
+              </button>
+            ))}
+          </div>
+          <div className="foot-col">
+            <p className="foot-h">Today</p>
+            <button onClick={() => go("today")}>
+              {counts.done} of {counts.total} done
+            </button>
+            <button onClick={() => go("activity")}>{counts.overdue} overdue</button>
+          </div>
+        </div>
+        <div className="foot-base">
+          <span>© 2026 CareCircle Lite</span>
+          <span>
+            {today ? prettyDate(today.date + "T12:00:00") : ""} · for {recipient}
+          </span>
+        </div>
       </footer>
     </div>
   );
