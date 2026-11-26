@@ -89,15 +89,37 @@ export default function App() {
   const later = (t: Task) => act(() => api.snooze(t.id, t.version), "Could not snooze — refreshed.");
   const undo = (t: Task) => act(() => api.reopen(t.id), "Could not reopen — refreshed.");
 
-  if (loading) return <div className="phone">Loading…</div>;
+  if (loading) return <div className="site">Loading…</div>;
+
+  const tabs: { id: Tab; label: string; ico: string }[] = [
+    { id: "today", label: "Today", ico: "🏠" },
+    { id: "meds", label: "Meds", ico: "💊" },
+    { id: "activity", label: "Activity", ico: "🕘" },
+    { id: "family", label: "Family", ico: "👪" },
+  ];
+  const me = members.find((m) => m.id === who)?.name ?? "family";
 
   return (
-    <div className="phone">
+    <div className="site">
+      <nav className="navbar">
+        <span className="brand">💚 CareCircle</span>
+        <div className="topnav">
+          {tabs.map((t) => (
+            <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
+              {t.ico} {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="nav-right">
+          <span className="nav-user">Helping as <b>{me}</b> · for {recipient}</span>
+          <div className="avatar">{recipient.slice(0, 1)}</div>
+        </div>
+      </nav>
+
       <header className="topbar">
         <div>
           <div className="greet">
-            ☀️ {greeting()},{" "}
-            <b>{members.find((m) => m.id === who)?.name ?? "family"}</b>
+            ☀️ {greeting()}, <b>{me}</b>
           </div>
           <h1 className="plan">
             {tab === "today"
@@ -109,10 +131,9 @@ export default function App() {
               : "Family"}
           </h1>
           <p className="date-line">
-            {today ? prettyDate(today.date + "T12:00:00") : ""} · for {recipient}
+            {today ? prettyDate(today.date + "T12:00:00") : ""}
           </p>
         </div>
-        <div className="avatar">{recipient.slice(0, 1)}</div>
       </header>
 
       {tab === "today" && (
@@ -264,7 +285,6 @@ function TodayTab(props: {
   );
   return (
     <>
-      <ProgressCard counts={counts} />
       {counts.total === 0 && (
         <div className="card">
           <p className="empty">No tasks yet — add one with ＋ below.</p>
@@ -274,65 +294,71 @@ function TodayTab(props: {
         </div>
       )}
 
-      <div className="sec-head">
-        <h2>💊 Medications Today</h2>
-      </div>
-      {meds.length ? (
-        meds.map((t) => <MedCard key={t.id} t={t} take={take} later={later} />)
-      ) : (
-        <p className="empty">No medicines pending.</p>
-      )}
+      <div className="cols cols-2">
+        <div>
+          <div className="sec-head">
+            <h2>💊 Medications Today</h2>
+          </div>
+          {meds.length ? (
+            meds.map((t) => <MedCard key={t.id} t={t} take={take} later={later} />)
+          ) : (
+            <p className="empty">No medicines pending.</p>
+          )}
 
-      <div className="sec-head">
-        <h2>📋 Other Tasks</h2>
-      </div>
-      {others.length ? (
-        others.map((t) => <TaskRow key={t.id} t={t} take={take} />)
-      ) : (
-        <p className="empty">Nothing else pending. 🎉</p>
-      )}
+          <div className="sec-head">
+            <h2>📋 Other Tasks</h2>
+          </div>
+          {others.length ? (
+            others.map((t) => <TaskRow key={t.id} t={t} take={take} />)
+          ) : (
+            <p className="empty">Nothing else pending. 🎉</p>
+          )}
 
-      <div className="sec-head">
-        <h2>✅ Done today</h2>
-      </div>
-      {today?.done.length ? (
-        today.done.map((t) => (
-          <div key={t.id} className="trow done">
-            <button className="check on" onClick={() => undo(t)} aria-label="Reopen" title="Tap to reopen">
-              ✓
-            </button>
-            <div>
-              <div className="tt">{t.title}</div>
-              <div className="byline">
-                {t.completed_by_name ? `by ${t.completed_by_name}` : ""}
-                {t.completed_at ? ` · ${fmtTime(t.completed_at)}` : ""} · tap ✓ to undo
+          <div className="sec-head">
+            <h2>✅ Done today</h2>
+          </div>
+          {today?.done.length ? (
+            today.done.map((t) => (
+              <div key={t.id} className="trow done">
+                <button className="check on" onClick={() => undo(t)} aria-label="Reopen" title="Tap to reopen">
+                  ✓
+                </button>
+                <div>
+                  <div className="tt">{t.title}</div>
+                  <div className="byline">
+                    {t.completed_by_name ? `by ${t.completed_by_name}` : ""}
+                    {t.completed_at ? ` · ${fmtTime(t.completed_at)}` : ""} · tap ✓ to undo
+                  </div>
+                </div>
               </div>
+            ))
+          ) : (
+            <p className="empty">Nothing done yet today.</p>
+          )}
+        </div>
+
+        <div className="aside">
+          <ProgressCard counts={counts} />
+          <div className="sec-head">
+            <h2>Who's helping?</h2>
+          </div>
+          <div className="card">
+            <div className="who">
+              {members.map((m) => (
+                <button
+                  key={m.id}
+                  className={who === m.id ? "sel" : ""}
+                  onClick={() => setWho(m.id)}
+                >
+                  {m.name}
+                </button>
+              ))}
             </div>
           </div>
-        ))
-      ) : (
-        <p className="empty">Nothing done yet today.</p>
-      )}
-
-      <div className="sec-head">
-        <h2>Who's helping?</h2>
-      </div>
-      <div className="card">
-        <div className="who">
-          {members.map((m) => (
-            <button
-              key={m.id}
-              className={who === m.id ? "sel" : ""}
-              onClick={() => setWho(m.id)}
-            >
-              {m.name}
-            </button>
-          ))}
+          <AskBox />
+          {error && <p className="err">{error}</p>}
         </div>
       </div>
-
-      <AskBox />
-      {error && <p className="err">{error}</p>}
     </>
   );
 }
@@ -411,7 +437,9 @@ function MedsTab({
         </div>
       </section>
       {all.length ? (
-        all.map((t) => <MedCard key={t.id} t={t} take={take} later={later} />)
+        <div className="cards-2">
+          {all.map((t) => <MedCard key={t.id} t={t} take={take} later={later} />)}
+        </div>
       ) : (
         <p className="empty">No medications scheduled.</p>
       )}
@@ -424,7 +452,7 @@ function MedsTab({
 function ActivityTab({ today }: { today: Today | null }) {
   const done = today?.done ?? [];
   return (
-    <>
+    <div className="narrow">
       <section className="card">
         <div className="prog-top">
           <span className="prog-label">✅ Done today ({done.length})</span>
@@ -461,7 +489,7 @@ function ActivityTab({ today }: { today: Today | null }) {
           ))}
         </section>
       )}
-    </>
+    </div>
   );
 }
 
@@ -484,7 +512,7 @@ function FamilyTab({
     return m;
   }, [today]);
   return (
-    <>
+    <div className="narrow">
       {members.map((m) => (
         <div key={m.id} className="fam-row">
           <div className="fam-av">{m.name.slice(0, 1)}</div>
@@ -518,7 +546,7 @@ function FamilyTab({
           </button>
         </div>
       </section>
-    </>
+    </div>
   );
 }
 

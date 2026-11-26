@@ -1,6 +1,6 @@
-/* CareCircle — mint care-app design system.
-   Inspired by modern medication-care apps: soft mint background,
-   rounded cards, green Taken pills, bottom tab bar. */
+/* CareCircle — mint care-app design system, responsive website.
+   Mobile: bottom tab bar, single column. Desktop (900px+): top navbar,
+   wide container, multi-column grids. */
 :root {
   --bg: #eaf3ef;
   --card: #ffffff;
@@ -22,25 +22,38 @@
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  background: #dfe9e4;
+  background: var(--bg);
   color: var(--ink);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 17px;
   line-height: 1.45;
 }
-.phone {
-  max-width: 480px;
+.site {
+  max-width: 1160px;
   margin: 0 auto;
   min-height: 100dvh;
-  background: var(--bg);
-  padding: 0 16px 120px;
-  position: relative;
+  padding: 0 24px 120px;
 }
+/* ---------- navbar ---------- */
+.navbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 0;
+}
+.brand { font-weight: 900; font-size: 22px; color: var(--primary-deep); white-space: nowrap; }
+.topnav { display: none; gap: 6px; margin-left: 12px; }
+.topnav button {
+  border: none; background: none; cursor: pointer;
+  font-size: 15px; font-weight: 800; color: var(--muted);
+  padding: 10px 18px; border-radius: 999px;
+}
+.topnav button.on { background: var(--primary); color: #fff; }
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.nav-user { font-size: 14px; font-weight: 700; color: var(--muted); }
 /* ---------- header ---------- */
-.topbar { padding: 20px 4px 4px; display: flex; align-items: center; justify-content: space-between; }
+.topbar { padding: 8px 0 4px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .greet { color: var(--muted); font-size: 15px; }
 .greet b { color: var(--ink); }
-h1.plan { font-size: 30px; margin: 2px 0; letter-spacing: -0.5px; }
+h1.plan { font-size: 34px; margin: 2px 0; letter-spacing: -0.5px; }
 .date-line { color: var(--muted); font-size: 15px; margin: 0 0 12px; }
 .avatar {
   width: 46px; height: 46px; border-radius: 50%;
@@ -49,11 +62,27 @@ h1.plan { font-size: 30px; margin: 2px 0; letter-spacing: -0.5px; }
   display: flex; align-items: center; justify-content: center;
   box-shadow: var(--shadow); flex-shrink: 0;
 }
+/* ---------- layout grids ---------- */
+.cols { display: grid; gap: 0 20px; grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 900px) {
+  .cols-2 { grid-template-columns: 1.35fr 1fr; }
+  .aside { position: sticky; top: 16px; }
+  .tabbar { display: none !important; }
+  .topnav { display: flex; }
+  .site { padding-bottom: 64px; }
+  .fab { right: 32px !important; bottom: 32px !important; }
+}
+.narrow { max-width: 760px; }
+.cards-2 { display: grid; gap: 0 16px; grid-template-columns: 1fr; }
+@media (min-width: 900px) {
+  .cards-2 { grid-template-columns: 1fr 1fr; }
+  .cards-2 > .med:nth-child(odd) { margin-right: 0; }
+}
 /* ---------- cards ---------- */
 .card {
   background: var(--card);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 18px;
   margin: 12px 0;
   box-shadow: var(--shadow);
 }
@@ -61,9 +90,9 @@ h1.plan { font-size: 30px; margin: 2px 0; letter-spacing: -0.5px; }
 .sec-head h2 { font-size: 18px; margin: 0; }
 .link { color: var(--primary-deep); font-weight: 700; font-size: 14px; }
 /* ---------- progress ---------- */
-.prog-top { display: flex; justify-content: space-between; align-items: baseline; }
+.prog-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .prog-label { font-weight: 800; font-size: 16px; }
-.prog-pct { color: var(--muted); font-size: 13px; }
+.prog-pct { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .bar { height: 10px; border-radius: 99px; background: var(--faint); margin: 10px 0; overflow: hidden; }
 .bar > i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--primary), #40c057); transition: width 0.4s; }
 .stats { display: flex; text-align: center; margin-top: 6px; }
@@ -92,14 +121,12 @@ h1.plan { font-size: 30px; margin: 2px 0; letter-spacing: -0.5px; }
   display: flex; align-items: center; justify-content: center; font-size: 22px;
 }
 .pill-ico.med-ico { background: var(--primary-soft); }
-.pill-ico.appt-ico { background: var(--blue-bg); }
-.pill-ico.check-ico { background: var(--amber-bg); }
 .med-body { flex: 1; min-width: 0; }
 .med-name { font-weight: 800; font-size: 17px; }
 .med-meta { color: var(--muted); font-size: 14px; margin-top: 1px; }
 .byline { color: var(--primary-deep); font-size: 14px; font-weight: 700; margin-top: 2px; }
 .actions { display: flex; gap: 8px; margin-top: 10px; }
-.btn-taken, .btn-later, .btn-chip {
+.btn-taken, .btn-later {
   border: none; cursor: pointer; font-weight: 800; font-size: 15px;
   padding: 11px 16px; border-radius: 999px;
 }
@@ -110,7 +137,6 @@ h1.plan { font-size: 30px; margin: 2px 0; letter-spacing: -0.5px; }
   display: inline-block; background: var(--primary); color: #fff;
   font-weight: 800; font-size: 14px; padding: 6px 14px; border-radius: 999px; margin-top: 8px;
 }
-.chip-over { background: var(--red); }
 /* ---------- task checkbox rows ---------- */
 .trow {
   display: flex; gap: 12px; align-items: center;
@@ -170,12 +196,16 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
 }
 .sheet {
   background: var(--bg); border-radius: 24px 24px 0 0; padding: 8px 20px 32px;
-  width: 100%; max-width: 480px; max-height: 88dvh; overflow-y: auto;
+  width: 100%; max-width: 560px; max-height: 88dvh; overflow-y: auto;
+}
+@media (min-width: 900px) {
+  .sheet-bg { align-items: center; padding: 24px; }
+  .sheet { border-radius: 24px; }
 }
 .grip { width: 44px; height: 5px; border-radius: 99px; background: #b9cec4; margin: 8px auto 4px; }
 /* ---------- ask ---------- */
 .ask-row { display: flex; gap: 8px; }
-.ask-row input { flex: 1; }
+.ask-row input { flex: 1; min-width: 0; }
 .ask-go {
   border: none; cursor: pointer; border-radius: 14px; padding: 0 20px;
   background: var(--primary); color: #fff; font-weight: 800; font-size: 16px;
@@ -212,12 +242,11 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
   margin-left: auto; background: var(--primary-soft); color: var(--primary-deep);
   font-weight: 800; font-size: 14px; padding: 5px 13px; border-radius: 999px; white-space: nowrap;
 }
-/* ---------- tab bar ---------- */
+/* ---------- tab bar (mobile only) ---------- */
 .tabbar {
   position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
   width: 100%; max-width: 480px; z-index: 20;
   display: flex; background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(8px);
   border-top: 1px solid var(--faint);
   padding: 8px 4px calc(10px + env(safe-area-inset-bottom));
 }
