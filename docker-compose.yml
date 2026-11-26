@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: carecircle
+      POSTGRES_PASSWORD: carecircle
+      POSTGRES_DB: carecircle
+    ports:
+      - "${DB_HOST_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carecircle -d carecircle"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://carecircle:carecircle@db:5432/carecircle
+      SEED_DEMO: "true"
+      # Optional: set one to use a real LLM for the assistant.
+      # GROQ_API_KEY: ""
+      # GEMINI_API_KEY: ""
+      # ASSISTANT_MODEL: template
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

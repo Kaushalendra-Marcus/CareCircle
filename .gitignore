@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Docker / misc
+*.log
+.DS_Store
+
+# Keep the brief PDF out of git (local only)
+Coding project*.pdf
+*.pdf
