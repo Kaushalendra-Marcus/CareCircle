@@ -1,15 +1,31 @@
-"""CareCircle Lite API."""
+"""CareCircle Lite API (v1)."""
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import Base, SessionLocal, engine
-from .models import CareRecipient  # noqa: F401  (register models)
-from .models import AiInteractionLog, CareTask, FamilyMember  # noqa: F401
+from .models import AssistantInteraction  # noqa: F401 (register models)
+from .models import CareRecipient, CareTask, FamilyMember  # noqa: F401
 from .routers import assistant, people, tasks
-from .seed import seed_demo
+from .seed import reset_demo, seed_demo
 
-app = FastAPI(title="CareCircle Lite API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Belt and braces: Alembic (entrypoint) is the source of truth for
+    # upgrades; create_all keeps `uvicorn app.main:app` working directly.
+    Base.metadata.create_all(bind=engine)
+    if os.getenv("SEED_DEMO", "false").lower() == "true":
+        db = SessionLocal()
+        try:
+            seed_demo(db)
+        finally:
+            db.close()
+    yield
+
+
+app = FastAPI(title="CareCircle Lite API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,30 +37,30 @@ app.add_middleware(
 app.include_router(tasks.router)
 app.include_router(people.recipients)
 app.include_router(people.members)
+app.include_router(people.today_router)
 app.include_router(assistant.router)
 
 
-@app.on_event("startup")
-def startup():
-    Base.metadata.create_all(bind=engine)
-    if os.getenv("SEED_DEMO", "false").lower() == "true":
-        db = SessionLocal()
-        try:
-            seed_demo(db)
-        finally:
-            db.close()
-
-
 @app.get("/api/health")
+@app.get("/api/v1/health")
 def health():
     return {"ok": True}
 
 
-@app.post("/api/seed")
+@app.post("/api/v1/seed")
 def seed():
     db = SessionLocal()
     try:
-        seed_demo(db)
-        return {"seeded": True}
+        return {"seeded": True, **seed_demo(db)}
+    finally:
+        db.close()
+
+
+@app.post("/api/v1/seed/reset")
+def seed_reset():
+    """Delete demo tasks and re-seed (documented reset command)."""
+    db = SessionLocal()
+    try:
+        return {"reset": True, **reset_demo(db)}
     finally:
         db.close()

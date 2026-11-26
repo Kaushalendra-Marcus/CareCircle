@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app import database as dbmod
 from app.database import Base, get_db
 from app.main import app
 
@@ -47,7 +46,11 @@ def client(db):
 
 @pytest.fixture()
 def family(client):
-    r = client.post("/api/recipients", json={"name": "Mum"}).json()
-    m1 = client.post("/api/members", json={"name": "Ravi"}).json()
-    m2 = client.post("/api/members", json={"name": "Priya"}).json()
-    return r, m1, m2
+    r = client.post("/api/v1/seed").json()
+    assert r["recipient"] == "Mum"
+    recips = client.get("/api/v1/recipients").json()
+    members = client.get("/api/v1/family-members").json()
+    rid = recips[0]["id"]
+    by_name = {m["name"]: m for m in members}
+    assert by_name["Ravi"]["relationship"] == "Son"
+    return {"id": rid, "members": by_name}

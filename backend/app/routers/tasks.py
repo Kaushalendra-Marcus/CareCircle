@@ -1,32 +1,54 @@
-"""Task CRUD + complete + today endpoints."""
+"""Task CRUD + complete + today endpoints (v1)."""
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
-from ..models import CareTask, FamilyMember
-from ..schemas import TaskComplete, TaskCreate, TaskOut, TaskUpdate, TodayOut
-from ..today import group_today, task_to_dict
+from ..models import CareRecipient, CareTask, FamilyMember
+from ..schemas import (
+    PRIORITIES,
+    STATUSES,
+    TaskComplete,
+    TaskCreate,
+    TaskOut,
+    TaskUpdate,
+    TodayOut,
+    normalize_task_type,
+)
+from ..today import _aware, group_today, task_to_dict
 
-router = APIRouter(prefix="/api/tasks", tags=["tasks"])
+router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 
 
 def _out(t: CareTask) -> dict:
     return task_to_dict(t)
 
 
+def _due(dt: datetime) -> datetime:
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+
 @router.post("", response_model=TaskOut, status_code=201)
 def create_task(payload: TaskCreate, db: Session = Depends(get_db)):
-    due = payload.due_at
-    if due.tzinfo is None:
-        due = due.replace(tzinfo=timezone.utc)
+    if not db.get(CareRecipient, payload.care_recipient_id):
+        raise HTTPException(404, "care recipient not found")
+    task_type = normalize_task_type(payload.task_type)
+    priority = (payload.priority or "normal").lower()
+    if priority not in PRIORITIES:
+        raise HTTPException(422, f"priority must be one of {PRIORITIES}")
+    if payload.assigned_member_id is not None and not db.get(
+        FamilyMember, payload.assigned_member_id
+    ):
+        raise HTTPException(404, "assigned family member not found")
     task = CareTask(
+        care_recipient_id=payload.care_recipient_id,
         title=payload.title.strip(),
-        category=payload.category or "other",
-        due_at=due,
-        notes=payload.notes or "",
-        recipient_id=payload.recipient_id,
+        description=payload.description or "",
+        task_type=task_type,
+        due_at=_due(payload.due_at),
+        priority=priority,
+        assigned_member_id=payload.assigned_member_id,
     )
     db.add(task)
     db.commit()
@@ -35,22 +57,21 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_db)):
 
 
 @router.get("", response_model=list[TaskOut])
-def list_tasks(status: str | None = None, db: Session = Depends(get_db)):
-    q = select(CareTask).options(joinedload(CareTask.completed_by)).order_by(
-        CareTask.due_at
+def list_tasks(
+    status: str | None = None,
+    care_recipient_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    q = (
+        select(CareTask)
+        .options(joinedload(CareTask.completed_by), joinedload(CareTask.assigned_member))
+        .order_by(CareTask.due_at)
     )
     if status:
         q = q.where(CareTask.status == status)
+    if care_recipient_id is not None:
+        q = q.where(CareTask.care_recipient_id == care_recipient_id)
     return [_out(t) for t in db.scalars(q).all()]
-
-
-@router.get("/today", response_model=TodayOut)
-def today(recipient_id: int | None = None, db: Session = Depends(get_db)):
-    q = select(CareTask).options(joinedload(CareTask.completed_by))
-    if recipient_id is not None:
-        q = q.where(CareTask.recipient_id == recipient_id)
-    tasks = db.scalars(q).all()
-    return group_today(list(tasks))
 
 
 @router.get("/{task_id}", response_model=TaskOut)
@@ -58,7 +79,7 @@ def get_task(task_id: int, db: Session = Depends(get_db)):
     t = db.get(CareTask, task_id)
     if not t:
         raise HTTPException(404, "task not found")
-    db.refresh(t, ["completed_by"])
+    db.refresh(t, ["completed_by", "assigned_member"])
     return _out(t)
 
 
@@ -68,31 +89,52 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
     if not t:
         raise HTTPException(404, "task not found")
     if payload.version is not None and payload.version != t.version:
-        raise HTTPException(
-            409,
-            "task changed by someone else — refresh and try again",
-        )
+        raise HTTPException(409, "task changed by someone else — refresh and try again")
     if payload.title is not None:
         t.title = payload.title.strip()
-    if payload.category is not None:
-        t.category = payload.category
+    if payload.description is not None:
+        t.description = payload.description
+    if payload.task_type is not None:
+        t.task_type = normalize_task_type(payload.task_type)
     if payload.due_at is not None:
-        due = payload.due_at
-        if due.tzinfo is None:
-            due = due.replace(tzinfo=timezone.utc)
-        t.due_at = due
-    if payload.notes is not None:
-        t.notes = payload.notes
+        t.due_at = _due(payload.due_at)
+    if payload.priority is not None:
+        if payload.priority.lower() not in PRIORITIES:
+            raise HTTPException(422, f"priority must be one of {PRIORITIES}")
+        t.priority = payload.priority.lower()
+    if payload.status is not None:
+        if payload.status not in STATUSES:
+            raise HTTPException(422, f"status must be one of {STATUSES}")
+        t.status = payload.status
+        if payload.status != "completed":
+            t.completed_by_member_id = None
+            t.completed_at = None
+    if payload.assigned_member_id is not None:
+        if payload.assigned_member_id != 0 and not db.get(
+            FamilyMember, payload.assigned_member_id
+        ):
+            raise HTTPException(404, "assigned family member not found")
+        t.assigned_member_id = payload.assigned_member_id or None
     t.version += 1
     db.commit()
     db.refresh(t)
-    db.refresh(t, ["completed_by"])
+    db.refresh(t, ["completed_by", "assigned_member"])
     return _out(t)
 
 
+@router.delete("/{task_id}", status_code=204)
+def delete_task(task_id: int, db: Session = Depends(get_db)):
+    t = db.get(CareTask, task_id)
+    if not t:
+        raise HTTPException(404, "task not found")
+    db.delete(t)
+    db.commit()
+    return None
+
+
 def _resolve_member(db: Session, payload: TaskComplete) -> FamilyMember | None:
-    if payload.completed_by_id is not None:
-        m = db.get(FamilyMember, payload.completed_by_id)
+    if payload.completed_by_member_id is not None:
+        m = db.get(FamilyMember, payload.completed_by_member_id)
         if not m:
             raise HTTPException(404, "family member not found")
         return m
@@ -112,21 +154,18 @@ def complete_task(task_id: int, payload: TaskComplete, db: Session = Depends(get
     t = db.get(CareTask, task_id)
     if not t:
         raise HTTPException(404, "task not found")
-    if t.status == "done":
-        raise HTTPException(409, "task is already done")
+    if t.status == "completed":
+        raise HTTPException(409, "task is already completed")
     if payload.version is not None and payload.version != t.version:
-        raise HTTPException(
-            409,
-            "task changed by someone else — refresh and try again",
-        )
+        raise HTTPException(409, "task changed by someone else — refresh and try again")
     member = _resolve_member(db, payload)
-    t.status = "done"
-    t.completed_by_id = member.id if member else None
+    t.status = "completed"
+    t.completed_by_member_id = member.id if member else None
     t.completed_at = datetime.now(timezone.utc)
     t.version += 1
     db.commit()
     db.refresh(t)
-    db.refresh(t, ["completed_by"])
+    db.refresh(t, ["completed_by", "assigned_member"])
     return _out(t)
 
 
@@ -136,7 +175,7 @@ def reopen_task(task_id: int, db: Session = Depends(get_db)):
     if not t:
         raise HTTPException(404, "task not found")
     t.status = "pending"
-    t.completed_by_id = None
+    t.completed_by_member_id = None
     t.completed_at = None
     t.version += 1
     db.commit()

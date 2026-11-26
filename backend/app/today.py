@@ -1,66 +1,77 @@
-"""Shared "today" grouping logic (also used by the assistant)."""
+"""Today grouping in the care recipient's timezone.
+
+Rules (documented assumptions):
+- completed = status "completed" AND completed today (recipient-local date).
+  A task finished late still shows as completed, never as overdue.
+- overdue = status "pending" AND due_at is in the past (includes tasks due
+  on earlier days — they stay visible until done or cancelled).
+- due = status "pending" AND due_at is now or later.
+- cancelled tasks never appear on the dashboard.
+- All comparisons use timezone-aware datetimes; naive values are assumed UTC.
+"""
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+
+def _aware(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 def task_to_dict(t) -> dict:
     return {
         "id": t.id,
+        "care_recipient_id": t.care_recipient_id,
         "title": t.title,
-        "category": t.category,
+        "description": t.description or "",
+        "task_type": t.task_type,
+        "due_at": _aware(t.due_at),
         "status": t.status,
-        "due_at": t.due_at,
-        "notes": t.notes or "",
-        "recipient_id": t.recipient_id,
-        "completed_by_id": t.completed_by_id,
+        "priority": t.priority or "normal",
+        "assigned_member_id": t.assigned_member_id,
+        "assigned_member_name": t.assigned_member.name if t.assigned_member else None,
+        "completed_by_member_id": t.completed_by_member_id,
         "completed_by_name": t.completed_by.name if t.completed_by else None,
-        "completed_at": t.completed_at,
+        "completed_at": _aware(t.completed_at),
         "version": t.version,
     }
 
 
-def group_today(tasks, now: datetime | None = None) -> dict:
-    """Split tasks into overdue / due / done buckets.
-
-    - done: status == "done" and completed today (UTC).
-    - overdue: still pending and due_at is in the past.
-    - due: still pending and due_at is now or later (rest of today+future).
-    """
-    now = now or datetime.now(timezone.utc)
-    if now.tzinfo is None:
-        now = now.replace(tzinfo=timezone.utc)
-    today = now.date()
+def group_today(tasks, now: datetime | None = None, tz: str = "UTC") -> dict:
+    zone = ZoneInfo(tz)
+    now = _aware(now) or datetime.now(timezone.utc)
+    local_now = now.astimezone(zone)
+    today = local_now.date()
     overdue, due, done = [], [], []
     for t in tasks:
+        if t.status == "cancelled":
+            continue
         d = task_to_dict(t)
-        due_at = t.due_at
-        if due_at is not None and due_at.tzinfo is None:
-            due_at = due_at.replace(tzinfo=timezone.utc)
-            d["due_at"] = due_at
-        done_on = t.completed_at or t.due_at
-        if done_on is not None and done_on.tzinfo is None:
-            done_on = done_on.replace(tzinfo=timezone.utc)
-        if t.status == "done":
-            if done_on is not None and done_on.date() == today:
+        if t.status == "completed":
+            done_on = _aware(t.completed_at) or _aware(t.due_at)
+            if done_on is not None and done_on.astimezone(zone).date() == today:
                 done.append(d)
-            else:
-                # Done on another day: not part of "today".
-                continue
-        elif due_at is not None and due_at < now:
+            continue
+        due_at = _aware(t.due_at)
+        if due_at is not None and due_at < now:
             overdue.append(d)
         else:
             due.append(d)
-    overdue.sort(key=lambda x: x["due_at"])
-    due.sort(key=lambda x: x["due_at"])
-    done.sort(key=lambda x: x["due_at"])
+    overdue.sort(key=lambda x: x["due_at"] or now)
+    due.sort(key=lambda x: x["due_at"] or now)
+    done.sort(key=lambda x: x["completed_at"] or x["due_at"] or now, reverse=True)
     return {
         "date": today.isoformat(),
         "overdue": overdue,
         "due": due,
         "done": done,
-        "counts": {
-            "overdue": len(overdue),
-            "due": len(due),
-            "done": len(done),
+        "summary": {
             "total": len(overdue) + len(due) + len(done),
+            "completed": len(done),
+            "pending": len(overdue) + len(due),
+            "overdue": len(overdue),
         },
     }
