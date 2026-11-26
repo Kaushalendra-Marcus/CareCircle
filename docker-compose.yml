@@ -20,22 +20,32 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://carecircle:carecircle@db:5432/carecircle
       SEED_DEMO: "true"
-      # Optional: set one to use a real LLM for the assistant.
+      # Optional: Groq for the assistant (template fallback otherwise).
       # GROQ_API_KEY: ""
-      # GEMINI_API_KEY: ""
-      # ASSISTANT_MODEL: template
+      # GROQ_MODEL: "llama-3.1-8b-instant"
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   web:
     build: ./frontend
     ports:
       - "5173:80"
     depends_on:
-      - api
+      api:
+        condition: service_started
 
 volumes:
   pgdata:

@@ -1,100 +1,179 @@
 # CareCircle Lite
 
-One shared place for a family coordinating an aging parent's care:
-what's overdue, what's due today, what's done — plus an "Ask about today"
-assistant that streams its answer.
+**Care is easier when everyone is in the loop.**
 
-## Run it (one command)
+## 1. Problem statement
+
+Families coordinating an ageing parent's care do it over WhatsApp and phone
+calls: who gave the evening medicine, whether the appointment is booked, what
+changed today. Information scatters, doses get missed or doubled, and nobody
+has one reliable picture of the day.
+
+## 2. Solution
+
+CareCircle Lite gives one family one shared place: today's tasks grouped as
+**overdue / due / done**, one-tap completion recording **who + when**, and an
+**"Ask about today"** assistant that streams answers grounded strictly in the
+day's real records. Runs with `docker compose up --build`.
+
+## 3. Features
+
+- Today dashboard: overdue / due / completed groups with counts, progress,
+  empty states, instant updates, relative times, assignee + completion attribution
+- Task CRUD: validated add/edit form (bottom sheet), two-tap delete, snooze (+2h)
+- One-tap Taken with member picker; stale-version and double-complete return 409
+- Assistant: real SSE streaming (`token`/`done`/`error` JSON events), prompt
+  chips, stop button, grounded template fallback, optional Groq LLM
+- Every assistant interaction logged (question, context, answer, latency, model)
+- Meds tab with adherence ring, Activity timeline, Family tab with per-member counts
+- Warm Aurviz-inspired UI: Inter, dark pill CTAs, Lucide SVG icons, real photography
+
+## 4. Screenshots
+
+Run it and open http://localhost:5173 — Today (hero + plan), Meds
+(adherence), Activity (timeline), Family (attribution).
+
+## 5. Technology stack
+
+| Layer | Choice |
+|---|---|
+| Frontend | React 18 + TypeScript + Vite, hand-rolled CSS (Aurviz theme), Lucide SVGs, custom API layer |
+| Backend | Python, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, psycopg 3 |
+| DB | PostgreSQL 16 |
+| Streaming | SSE (`text/event-stream`), real server chunks |
+| LLM | Groq (`llama-3.1-8b-instant` default) or grounded template fallback |
+| Tests | pytest + FastAPI TestClient (SQLite) |
+| Infra | Docker Compose (db + api + web), persistent volume, healthchecks |
+
+**Deliberate deviations from a "standard" stack:** no Tailwind/shadcn (the
+custom CSS already delivers the required warm theme with zero build weight);
+no TanStack Query/React Hook Form/Zod (the app's data needs fit a small typed
+`api.ts` + controlled form with validation); no React Router (4 tabs, no deep
+links needed); no separate completion-history table (completion lives on the
+task — right scope for an MVP).
+
+## 6. Architecture overview
+
+```
+browser ──▶ nginx (web:80→5173) ──/api/*──▶ FastAPI (api:8000) ──▶ Postgres (db:5432)
+                                            │  ├─ /api/v1/tasks, /today, /recipients, /family-members
+                                            │  ├─ /api/v1/assistant/ask (SSE) + /history
+                                            │  └─ entrypoint: wait-db → alembic upgrade → seed → uvicorn
+```
+
+## 7. API endpoints (`/api/v1`)
+
+- `GET /health` · `POST /seed` · `POST /seed/reset` (reset demo data)
+- `GET /recipients`, `GET /recipients/{id}`
+- `GET /family-members[?care_recipient_id]`, `GET /family-members/{id}`, `POST /family-members`
+- `POST /tasks` (201; 404 unknown recipient/assignee; 422 bad priority/title), `GET /tasks[?status&care_recipient_id]`, `GET /tasks/{id}`, `PATCH /tasks/{id}` (409 stale version), `DELETE /tasks/{id}` (204), `POST /tasks/{id}/complete` (409 already done), `POST /tasks/{id}/reopen`
+- `GET /today?care_recipient_id=` → `{date, recipient, summary{total,completed,pending,overdue}, overdue, due, done}`
+- `POST /assistant/ask` (SSE) · `GET /assistant/history`
+- Interactive docs: http://localhost:8000/docs
+
+## 8. Database schema overview
+
+- `care_recipients(id, name, date_of_birth, timezone, notes, …)` — timezone drives "today" (default Asia/Kolkata)
+- `family_members(id, care_recipient_id→recipients, name, relationship, avatar_url, …)`
+- `care_tasks(id, care_recipient_id→recipients, title, description, task_type, due_at TIMESTAMPTZ, status[pending|completed|cancelled], priority, assigned_member_id→members, completed_by_member_id→members, completed_at, version, …)` — indexed on status, due_at
+- `assistant_interactions(id, care_recipient_id, family_member_id, question, context_sent, answer, latency_ms, model_name, …)`
+
+## 9. AI streaming architecture
+
+`POST /assistant/ask` → gather today's tasks + recipient + members → build
+text context → Groq if `GROQ_API_KEY` set else grounded template (intent
+matching: pending/overdue/morning/evening/medicine/person + medical-advice
+refusal) → `StreamingResponse` yields `data: {"type":"token",…}` per word
+(~30ms), then persists the log row and yields `{"type":"done",
+"interaction_id"}`. Client parses JSON events progressively (no fake typing)
+and supports AbortController stop; disconnects are still logged as interrupted.
+
+## 10. AI logging implementation
+
+One `assistant_interactions` row per stream: exact question, exact context
+sent, full answer, `latency_ms` (request start → generation complete), model
+name (`template` or Groq model), recipient/member IDs. Never logs API keys.
+`GET /assistant/history` returns the latest 50.
+
+## 11. How to run with Docker Compose
 
 ```bash
 docker compose up --build
 ```
 
-- UI → http://localhost:5173
-- API → http://localhost:8000 (docs at `/docs`)
-- Postgres → localhost:5432 (user/password/db: `carecircle`)
+- UI → http://localhost:5173 · API → http://localhost:8000 · DB → localhost:5432
+- If port 5432 is taken: `DB_HOST_PORT=5433 docker compose up --build`
+- Fresh boot auto-migrates (Alembic) and seeds the demo family.
+- Stop: `docker compose down` (data persists in `pgdata`; `down -v` wipes it).
 
-On first start the API auto-seeds a demo family (Mum + Ravi + Priya with a
-few tasks across overdue / due / done). If you start with an empty database
-later, tap **"Load demo tasks"** in the UI or `POST /api/seed`.
+## 12. Environment variables
 
-### Run without Docker (dev)
+See `.env.example`. `DATABASE_URL`, `SEED_DEMO=true`, `DB_HOST_PORT=5432`,
+optional `GROQ_API_KEY` + `GROQ_MODEL` (default `llama-3.1-8b-instant`).
+Without a key the template assistant is used — still streamed, still logged.
 
-```bash
-# backend (needs a local Postgres, or set DATABASE_URL to sqlite for a quick try)
-cd backend && pip install -r requirements.txt && SEED_DEMO=true uvicorn app.main:app --reload
-
-# frontend
-cd frontend && npm install && npm run dev   # http://localhost:5173, /api proxied to :8000
-```
-
-### Run backend tests
+## 13. How to run tests
 
 ```bash
 cd backend && pip install -r requirements.txt && python -m pytest -q
 ```
 
-## What it does
+9 tests, all deterministic (timestamps relative to now): today grouping +
+summary, timezone overdue, completion attribution + double-done 409,
+nonexistent-task 404, creation validation (3 cases), cancelled exclusion,
+delete flow, assistant real-data + logging, no-invented-completions.
+Migrations are verified separately against real Postgres (`alembic upgrade head`, twice for idempotence).
 
-| Requirement | Where |
-|---|---|
-| Care recipient, family members, tasks with due time + status; create / list / update / complete; `GET /api/tasks/today` → done / due / overdue | `backend/app/routers/tasks.py`, `backend/app/routers/people.py`, `backend/app/today.py` |
-| "Today" screen grouped overdue / due / done; add task; one-tap mark-done recording who + when; big-text phone-first UI | `frontend/src/App.tsx`, `frontend/src/styles.css` |
-| "Ask about today" box; backend streams answer via SSE | `backend/app/routers/assistant.py`, `api.ask()` + Ask section in `App.tsx` |
-| Every question + context + answer + latency stored in `ai_interaction_logs` (`GET /api/assistant/history`) | `backend/app/models.py` (`AiInteractionLog`) |
-| `docker compose up` starts db + api + ui | `docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile` |
-| 5 pytest tests (today grouping, overdue boundary, complete attribution, double-done + stale-version 409s, assistant stream + log) | `backend/tests/` |
+## 14. Seed data and reset commands
 
-**Nice-to-have picked:** concurrent "mark done" is safe — tasks carry a
-`version` number; completing/updating with a stale version returns `409`
-instead of silently overwriting, and the UI refreshes and tells the user.
-The member picker doubles as the lightweight "who did what" identity (no
-passwords — deliberate for a 4–6h scope).
+- Auto-seed on boot (`SEED_DEMO=true`): Mum (Asia/Kolkata) + Ravi/Priya/Ananya;
+  6 tasks relative to now (mix of overdue/due/done with who+when). Idempotent.
+- `POST /api/v1/seed` — top up demo data anytime.
+- `POST /api/v1/seed/reset` — delete Mum's tasks and re-seed (documented reset).
+- Fresh DB from scratch: `docker compose down -v && docker compose up --build`.
 
-## Design choices & assumptions
+## 15. Design decisions
 
-- **Overdue = pending + `due_at` in the past (server UTC).** Done = completed
-  today. A task done on another day doesn't appear under "today". All times
-  stored as timestamptz; naive inputs are assumed UTC.
-- **Assistant = template by default, LLM-optional.** `build_summary()` turns
-  the day's buckets into "1 overdue… 2 still due… 1 done…" prose naming who
-  did what. If `GROQ_API_KEY` (or `GEMINI_API_KEY`) is set, the backend calls
-  that model and streams its answer instead — the SSE shape and logging are
-  identical either way. Streaming is word-by-word SSE; the log row is written
-  when the stream finishes.
-- **No migrations (intentional):** `create_all` on startup. For a pilot with
-  one family this removes a whole failure class; Alembic would be step one
-  with real users.
-- **No auth:** the member picker ("Who is doing it?") records attribution
-  without passwords — right tradeoff for tired caregivers in a pilot, and
-  stated in the brief as optional.
-- **Frontend has no UI framework** — hand-rolled CSS in a mint care-app
-  style: greeting + "Today's Plan" header, Daily Progress card, medicine
-  cards with Taken / Later (+2h snooze) pills, adherence ring on the Meds
-  tab, activity timeline, family attribution, bottom tab bar (Today / Meds /
-  Activity / Family) and a ＋ bottom-sheet to add tasks. 17px+ type,
-  nothing behind menus.
+- **Overdue/due derived, never stored**; `cancelled` excluded everywhere.
+- **Done = completed today (recipient-local date)** — a late finish still shows as completed, never overdue.
+- **Recipient timezone** (Asia/Kolkata) defines "today"; naive datetimes assumed UTC.
+- **Optimistic concurrency** (`version` → 409) instead of auth — right for a no-login family pilot.
+- **No login**: member picker records attribution;signup friction would kill a tired-caregiver pilot.
+- **Template assistant** grounded in SQL rows with intent matching + medical refusal; LLM is an upgrade path, not a dependency.
+- **create_all + Alembic**: Alembic is the upgrade source of truth; `create_all` keeps `uvicorn app.main:app` runnable for local dev.
 
-## What I'd do next (with more time)
+## 16. Trade-offs
 
-1. Login (passkeys/magic link) + per-family scoping so many families can use it.
-2. Alembic migrations + a nightly "carry overdue forward" job.
-3. Voice input for "Ask about today" via Web Speech API.
-4. Push reminders (e.g. WhatsApp) for tasks overdue > 1h.
+- Custom CSS instead of Tailwind/shadcn; custom `api.ts` instead of TanStack Query; controlled form instead of RHF/Zod; tabs instead of Router — each cuts dependency weight with no UX loss at this scope.
+- Latency includes stream pacing (~30ms/word), so it measures interaction time, not pure model time.
+- Seed demo is one family; multi-tenancy needs auth + scoping (see §18).
 
-## AI tools used
+## 17. Limitations
 
-- **Muse Spark (OpenCode)** — scaffolded the repo, wrote the FastAPI routers /
-  React UI / tests from my direction, and helped debug the SQLite-naive-datetime
-  test failure. I reviewed and can explain every file; the grouping rule,
-  concurrency design and template wording are my own decisions.
+- Single family, no authentication/authorization.
+- Template assistant handles common intents; unusual phrasings fall back to a full-day summary.
+- No push reminders, no recurring-task engine (snooze only), no offline support.
+- Times displayed in the browser's locale, not forced to recipient tz.
 
-## Time spent
+## 18. What I would build next
 
-~5 hours (backend ~2h, frontend ~1.5h, streaming+logs+tests ~1h, docker/README ~0.5h).
+1. Login (passkeys/magic link) + per-family scoping.
+2. Recurring schedules + push reminders (e.g. WhatsApp) for overdue > 1h.
+3. Voice input for "Ask about today".
+4. Alembic autogenerate in CI; nightly carry-forward of overdue.
 
-## Credits
+## 19. AI tools used and what they helped with
 
-- Icons: Lucide (`lucide-static`, ISC license), inlined in `frontend/src/icons.tsx`.
-- Photography: Unsplash License (free to use) — caregiving images in
-  `frontend/public/images/`.
+- **Muse Spark (OpenCode agent)**: scaffolded repo/compose, drafted
+  FastAPI routers + React UI + tests from my direction, debugged the
+  SQLite-naive-datetime failure and the first-boot seed race (fixed by seeding
+  in the container entrypoint as well as app lifespan). I reviewed, tested,
+  and can explain every file; grouping rules, concurrency design, template
+  wording, and theme extraction (docs + live CSS) are my decisions.
+
+## 20. Credits & time
+
+- Icons: Lucide (`lucide-static`, ISC). Photography: Unsplash License
+  (`frontend/public/images/`).
+- ~5h core build + theming iterations; compliance pass (v1 API, Alembic,
+  timezone logic, JSON SSE, 9 tests, docs) on top.

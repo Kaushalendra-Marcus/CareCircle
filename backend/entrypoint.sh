@@ -20,4 +20,18 @@ for i in range(60):
         time.sleep(2)
 EOF
 alembic upgrade head
+if [ "${SEED_DEMO:-false}" = "true" ]; then
+  echo "Seeding demo data..."
+  DATABASE_URL="$DATABASE_URL" SEED_DEMO=true python - <<'EOF'
+import os
+os.environ.setdefault("DATABASE_URL", os.environ["DATABASE_URL"])
+from app.database import SessionLocal
+from app.seed import seed_demo
+db = SessionLocal()
+try:
+    print(seed_demo(db))
+finally:
+    db.close()
+EOF
+fi
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000
