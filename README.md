@@ -92,3 +92,9 @@ passwords — deliberate for a 4–6h scope).
 ## Time spent
 
 ~5 hours (backend ~2h, frontend ~1.5h, streaming+logs+tests ~1h, docker/README ~0.5h).
+
+## Credits
+
+- Icons: Lucide (`lucide-static`, ISC license), inlined in `frontend/src/icons.tsx`.
+- Photography: Unsplash License (free to use) — caregiving images in
+  `frontend/public/images/`.
