@@ -1,16 +1,23 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, fmtTime, type Member, type Task, type Today } from "./api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api, fmtTime, relTime, type Member, type Task, type Today } from "./api";
 import { Icon } from "./icons";
 import "./styles.css";
 
 type Tab = "today" | "meds" | "activity" | "family";
-const CATS = ["medicine", "appointment", "checkin", "other"];
-const CAT_ICON: Record<string, string> = {
-  medicine: "pill",
+const TYPES = ["medication", "appointment", "checkin", "general", "other"];
+const TYPE_ICON: Record<string, string> = {
+  medication: "pill",
   appointment: "calendar",
   checkin: "phone",
+  general: "clipboard-list",
   other: "clipboard-list",
 };
+const PROMPTS = [
+  "What's still pending?",
+  "Any overdue tasks?",
+  "Summarize today.",
+  "Did anyone give the morning medicine?",
+];
 
 function toLocalInput(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
@@ -25,6 +32,14 @@ function prettyDate(iso: string): string {
     day: "numeric",
   });
 }
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+/* ================= App ================= */
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("today");
@@ -33,9 +48,17 @@ export default function App() {
   const [recipient, setRecipient] = useState("Mum");
   const [who, setWho] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [sheet, setSheet] = useState(false);
+  const [netErr, setNetErr] = useState(false);
+  const [sheet, setSheet] = useState<null | { editing?: Task }>(null);
   const [menu, setMenu] = useState(false);
+  const [toast, setToast] = useState("");
+  const toastTimer = useRef<number | null>(null);
+
+  const say = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(""), 2600);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -48,8 +71,9 @@ export default function App() {
       setMembers(m);
       if (r[0]) setRecipient(r[0].name);
       setWho((w) => (w === null && m.length ? m[0].id : w));
+      setNetErr(false);
     } catch {
-      /* offline — keep old state */
+      setNetErr(true);
     } finally {
       setLoading(false);
     }
@@ -59,33 +83,47 @@ export default function App() {
     load();
   }, [load]);
 
-  const counts = today?.counts ?? { overdue: 0, due: 0, done: 0, total: 0 };
+  const counts = today?.summary ?? { total: 0, completed: 0, pending: 0, overdue: 0 };
+  const dueCount = counts.pending - counts.overdue;
   const meds = useMemo(
     () =>
       [...(today?.overdue ?? []), ...(today?.due ?? [])].filter(
-        (t) => t.category === "medicine"
+        (t) => t.task_type === "medication"
       ),
     [today]
   );
+  const me = members.find((m) => m.id === who)?.name ?? "family";
 
-  async function act(fn: () => Promise<unknown>, fail: string) {
-    setError("");
+  async function act(fn: () => Promise<unknown>, ok: string, fail: string) {
     try {
       await fn();
       await load();
+      say(ok);
     } catch {
-      setError(fail);
       await load();
+      say(fail);
     }
   }
+  const needWho = () => {
+    if (who === null) {
+      say("Tap your name under Who's helping first.");
+      return false;
+    }
+    return true;
+  };
   const take = (t: Task) =>
-    who === null
-      ? setError("Tap your name under “Who's helping?” first.")
-      : act(() => api.complete(t.id, who, t.version), "Someone just updated this — refreshed.");
-  const later = (t: Task) => act(() => api.snooze(t.id, t.version), "Could not snooze — refreshed.");
-  const undo = (t: Task) => act(() => api.reopen(t.id), "Could not reopen — refreshed.");
-
-  if (loading) return <div className="site">Loading…</div>;
+    needWho() &&
+    act(
+      () => api.complete(t.id, who, t.version),
+      `Done — ${t.title}`,
+      "Someone just updated this; refreshed."
+    );
+  const later = (t: Task) =>
+    act(() => api.snooze(t.id, t.version), "Snoozed by 2 hours.", "Could not snooze; refreshed.");
+  const undo = (t: Task) =>
+    act(() => api.reopen(t.id), "Moved back to due.", "Could not reopen; refreshed.");
+  const remove = (t: Task) =>
+    act(() => api.removeTask(t.id), "Task deleted.", "Could not delete; refreshed.");
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: "today", label: "Today", icon: "home" },
@@ -93,8 +131,6 @@ export default function App() {
     { id: "activity", label: "Activity", icon: "activity" },
     { id: "family", label: "Family", icon: "users" },
   ];
-  const me = members.find((m) => m.id === who)?.name ?? "family";
-
   const go = (t: Tab) => {
     setTab(t);
     setMenu(false);
@@ -117,7 +153,7 @@ export default function App() {
           ))}
         </div>
         <div className="nav-right">
-          <button className="btn-solid-sm" onClick={() => setSheet(true)}>
+          <button className="btn-solid-sm" onClick={() => setSheet({})}>
             <span className="ic">
               <Icon name="plus" size={15} />
             </span>
@@ -149,23 +185,14 @@ export default function App() {
 
       <header className="topbar">
         {tab === "today" ? (
-          <Hero
-            recipient={recipient}
-            me={me}
-            counts={counts}
-            onAdd={() => setSheet(true)}
-          />
+          <Hero recipient={recipient} me={me} members={members} counts={counts} onAdd={() => setSheet({})} />
         ) : (
           <div>
             <p className="hero-eyebrow">
               CareCircle for <b>{recipient}</b>
             </p>
             <h1 className="plan">
-              {tab === "meds"
-                ? "Medications."
-                : tab === "activity"
-                ? "Activity."
-                : "Family."}
+              {tab === "meds" ? "Medications." : tab === "activity" ? "Activity." : "Family."}
             </h1>
             <p className="date-line">
               {tab === "meds"
@@ -179,37 +206,56 @@ export default function App() {
         )}
       </header>
 
-      {tab === "today" && (
-        <TodayTab
-          today={today}
-          counts={counts}
-          meds={meds}
-          members={members}
-          who={who}
-          setWho={setWho}
-          take={take}
-          later={later}
-          undo={undo}
-          error={error}
-          reload={load}
-        />
-      )}
-      {tab === "meds" && (
-        <MedsTab today={today} take={take} later={later} />
-      )}
-      {tab === "activity" && <ActivityTab today={today} />}
-      {tab === "family" && (
-        <FamilyTab members={members} today={today} reload={load} />
+      {loading ? (
+        <Skeleton />
+      ) : netErr && !today ? (
+        <div className="card">
+          <p>Could not reach the API. Is it running?</p>
+          <button className="btn-primary" onClick={load}>
+            Retry
+          </button>
+        </div>
+      ) : (
+        <>
+          {tab === "today" && (
+            <TodayTab
+              today={today}
+              counts={counts}
+              meds={meds}
+              members={members}
+              who={who}
+              setWho={setWho}
+              take={take}
+              later={later}
+              undo={undo}
+              remove={remove}
+              onEdit={(t) => setSheet({ editing: t })}
+              reload={load}
+              say={say}
+            />
+          )}
+          {tab === "meds" && <MedsTab today={today} take={take} later={later} remove={remove} onEdit={(t) => setSheet({ editing: t })} />}
+          {tab === "activity" && <ActivityTab today={today} />}
+          {tab === "family" && <FamilyTab members={members} today={today} reload={load} say={say} setWho={setWho} go={go} />}
+        </>
       )}
 
-      <button className="fab" onClick={() => setSheet(true)} aria-label="Add task">
+      <button className="fab" onClick={() => setSheet({})} aria-label="Add task">
         <Icon name="plus" size={28} />
       </button>
-      {sheet && <AddSheet close={() => setSheet(false)} reload={load} />}
+      {sheet && (
+        <TaskSheet
+          editing={sheet.editing}
+          members={members}
+          close={() => setSheet(null)}
+          reload={load}
+          say={say}
+        />
+      )}
 
       <nav className="tabbar">
         {tabs.map((t) => (
-          <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
+          <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => go(t.id)}>
             <span className="ico">
               <Icon name={t.icon} size={22} />
             </span>
@@ -227,7 +273,7 @@ export default function App() {
               </span>
               CareCircle
             </div>
-            <p className="foot-tag">One shared place for the family's care.</p>
+            <p className="foot-tag">Care is easier when everyone is in the loop.</p>
           </div>
           <div className="foot-col">
             <p className="foot-h">Care</p>
@@ -248,7 +294,7 @@ export default function App() {
           <div className="foot-col">
             <p className="foot-h">Today</p>
             <button onClick={() => go("today")}>
-              {counts.done} of {counts.total} done
+              {counts.completed} of {counts.total} done
             </button>
             <button onClick={() => go("activity")}>{counts.overdue} overdue</button>
           </div>
@@ -260,34 +306,42 @@ export default function App() {
           </span>
         </div>
       </footer>
+
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
 
-/* ================= Hero (big landing) ================= */
+/* ================= Hero ================= */
 
 function Hero({
   recipient,
   me,
+  members,
   counts,
   onAdd,
 }: {
   recipient: string;
   me: string;
-  counts: { overdue: number; due: number; done: number; total: number };
+  members: Member[];
+  counts: { overdue: number; pending: number; completed: number; total: number };
   onAdd: () => void;
 }) {
+  const dueCount = counts.pending - counts.overdue;
   return (
     <section className="hero">
       <div className="hero-grid">
         <div className="hero-copy">
-          <p className="hero-eyebrow">
-            CareCircle for <b>{recipient}</b> · Helping as <b>{me}</b>
-          </p>
-          <h1 className="hero-title">One shared place for the family's care.</h1>
+          <p className="hero-eyebrow">CareCircle Lite · Demo mode</p>
+          <h1 className="hero-title">
+            {greeting()}, {me}. Let's take care of {recipient}'s day.
+          </h1>
           <p className="hero-sub">
-            See what's overdue, due and done today — medicines, appointments
-            and check-ins — and who did what, at a glance.
+            <b>
+              {counts.completed} done · {dueCount} to go
+              {counts.overdue > 0 ? ` · ${counts.overdue} overdue` : ""}
+            </b>{" "}
+            — medicines, appointments and check-ins, with who did what.
           </p>
           <div className="hero-ctas">
             <button className="btn-solid-sm btn-lg" onClick={onAdd}>
@@ -299,9 +353,7 @@ function Hero({
             <button
               className="btn-ghost btn-lg"
               style={{ width: "auto", marginTop: 0 }}
-              onClick={() =>
-                document.getElementById("plan")?.scrollIntoView({ behavior: "smooth" })
-              }
+              onClick={() => document.getElementById("plan")?.scrollIntoView({ behavior: "smooth" })}
             >
               See today's plan
             </button>
@@ -312,12 +364,16 @@ function Hero({
               <div className="l">Overdue</div>
             </div>
             <div>
-              <div className="n amber">{counts.due}</div>
+              <div className="n amber">{dueCount}</div>
               <div className="l">Due today</div>
             </div>
             <div>
-              <div className="n green">{counts.done}</div>
+              <div className="n green">{counts.completed}</div>
               <div className="l">Done</div>
+            </div>
+            <div>
+              <div className="n">{members.length}</div>
+              <div className="l">Helping</div>
             </div>
           </div>
         </div>
@@ -332,10 +388,27 @@ function Hero({
   );
 }
 
+/* ================= Skeleton ================= */
+
+function Skeleton() {
+  return (
+    <div aria-label="Loading">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="card skel">
+          <div className="skel-line w60" />
+          <div className="skel-line" />
+          <div className="skel-line w40" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ================= Today ================= */
 
-function ProgressCard({ counts }: { counts: { overdue: number; due: number; done: number; total: number } }) {
-  const pct = counts.total ? Math.round((counts.done / counts.total) * 100) : 0;
+function ProgressCard({ counts }: { counts: { overdue: number; pending: number; completed: number; total: number } }) {
+  const due = counts.pending - counts.overdue;
+  const pct = counts.total ? Math.round((counts.completed / counts.total) * 100) : 0;
   return (
     <section className="card">
       <div className="prog-top">
@@ -345,7 +418,9 @@ function ProgressCard({ counts }: { counts: { overdue: number; due: number; done
           </span>{" "}
           Daily Progress
         </span>
-        <span className="prog-pct">{counts.done}/{counts.total} · {pct}% done</span>
+        <span className="prog-pct">
+          {counts.completed}/{counts.total} · {pct}%
+        </span>
       </div>
       <div className="bar">
         <i style={{ width: `${pct}%` }} />
@@ -356,11 +431,11 @@ function ProgressCard({ counts }: { counts: { overdue: number; due: number; done
           <div className="l">Overdue</div>
         </div>
         <div>
-          <div className="n amber">{counts.due}</div>
+          <div className="n amber">{due}</div>
           <div className="l">Due today</div>
         </div>
         <div>
-          <div className="n green">{counts.done}</div>
+          <div className="n green">{counts.completed}</div>
           <div className="l">Done</div>
         </div>
       </div>
@@ -368,29 +443,88 @@ function ProgressCard({ counts }: { counts: { overdue: number; due: number; done
   );
 }
 
-function MedCard({
+function CardActions({
   t,
   take,
   later,
+  remove,
+  onEdit,
 }: {
   t: Task;
   take: (t: Task) => void;
   later: (t: Task) => void;
+  remove: (t: Task) => void;
+  onEdit: (t: Task) => void;
 }) {
-  const over = t.status !== "done" && new Date(t.due_at).getTime() < Date.now();
-  if (t.status === "done")
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <>
+      <div className="actions">
+        <button className="btn-taken" onClick={() => take(t)}>
+          <span className="ic">
+            <Icon name="check" size={16} />
+          </span>{" "}
+          Taken
+        </button>
+        <button className="btn-later" onClick={() => later(t)}>
+          <span className="ic">
+            <Icon name="clock" size={16} />
+          </span>{" "}
+          Later
+        </button>
+      </div>
+      <div className="row-actions">
+        <button className="mini-btn" onClick={() => onEdit(t)}>
+          <span className="ic">
+            <Icon name="pencil" size={14} />
+          </span>{" "}
+          Edit
+        </button>
+        {confirm ? (
+          <>
+            <button className="mini-btn danger" onClick={() => remove(t)}>
+              Confirm delete
+            </button>
+            <button className="mini-btn" onClick={() => setConfirm(false)}>
+              Keep
+            </button>
+          </>
+        ) : (
+          <button className="mini-btn" onClick={() => setConfirm(true)}>
+            <span className="ic">
+              <Icon name="trash" size={14} />
+            </span>{" "}
+            Delete
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+function MedCard(props: {
+  t: Task;
+  take: (t: Task) => void;
+  later: (t: Task) => void;
+  remove: (t: Task) => void;
+  onEdit: (t: Task) => void;
+}) {
+  const { t, take, later, remove, onEdit } = props;
+  const over = t.status !== "completed" && new Date(t.due_at).getTime() < Date.now();
+  if (t.status === "completed")
     return (
       <div className="med done">
         <div className="pill-ico med-ico">
-          <Icon name={CAT_ICON[t.category] ?? "clipboard-list"} size={22} />
+          <Icon name={TYPE_ICON[t.task_type] ?? "clipboard-list"} size={22} />
         </div>
         <div className="med-body">
           <div className="med-name">{t.title}</div>
           <div className="med-meta">
-            {t.category} · was due {fmtTime(t.due_at)}
+            {t.task_type} · was due {fmtTime(t.due_at)}
           </div>
           <span className="chip-taken">
             Taken{t.completed_by_name ? ` · ${t.completed_by_name}` : ""}
+            {t.completed_at ? ` · ${relTime(t.completed_at)}` : ""}
           </span>
         </div>
       </div>
@@ -403,31 +537,71 @@ function MedCard({
       <div className="med-body">
         <div className="med-name">{t.title}</div>
         <div className="med-meta">
-          {t.category}
-          {t.notes ? ` · ${t.notes}` : ""}
+          {t.task_type}
+          {t.description ? ` · ${t.description}` : ""}
+          {t.assigned_member_name ? ` · for ${t.assigned_member_name}` : ""}
         </div>
-        <div className="actions">
-          <button className="btn-taken" onClick={() => take(t)}>
-            <span className="ic">
-              <Icon name="check" size={16} />
-            </span>{" "}
-            Taken
+        <CardActions t={t} take={take} later={later} remove={remove} onEdit={onEdit} />
+      </div>
+    </div>
+  );
+}
+
+function TaskRow({
+  t,
+  take,
+  remove,
+  onEdit,
+}: {
+  t: Task;
+  take: (t: Task) => void;
+  remove: (t: Task) => void;
+  onEdit: (t: Task) => void;
+}) {
+  const over = new Date(t.due_at).getTime() < Date.now();
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <div className={`trow${over ? " overdue" : ""}`}>
+      <button className="check" onClick={() => take(t)} aria-label={`Mark ${t.title} done`}>
+        <Icon name="check" size={16} />
+      </button>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="tt">{t.title}</div>
+        <div className="med-meta">
+          <span className="ic">
+            <Icon name={TYPE_ICON[t.task_type] ?? "clipboard-list"} size={14} />
+          </span>{" "}
+          {fmtTime(t.due_at)}
+          {t.assigned_member_name ? ` · for ${t.assigned_member_name}` : ""}
+        </div>
+        <div className="row-actions">
+          <button className="mini-btn" onClick={() => onEdit(t)}>
+            Edit
           </button>
-          <button className="btn-later" onClick={() => later(t)}>
-            <span className="ic">
-              <Icon name="clock" size={16} />
-            </span>{" "}
-            Later
-          </button>
+          {confirm ? (
+            <>
+              <button className="mini-btn danger" onClick={() => remove(t)}>
+                Confirm delete
+              </button>
+              <button className="mini-btn" onClick={() => setConfirm(false)}>
+                Keep
+              </button>
+            </>
+          ) : (
+            <button className="mini-btn" onClick={() => setConfirm(true)}>
+              Delete
+            </button>
+          )}
         </div>
       </div>
+      <span className={`tag${over ? " red" : " amber"}`}>{over ? "Overdue" : "Due"}</span>
     </div>
   );
 }
 
 function TodayTab(props: {
   today: Today | null;
-  counts: { overdue: number; due: number; done: number; total: number };
+  counts: { overdue: number; pending: number; completed: number; total: number };
   meds: Task[];
   members: Member[];
   who: number | null;
@@ -435,14 +609,16 @@ function TodayTab(props: {
   take: (t: Task) => void;
   later: (t: Task) => void;
   undo: (t: Task) => void;
-  error: string;
+  remove: (t: Task) => void;
+  onEdit: (t: Task) => void;
   reload: () => void;
+  say: (m: string) => void;
 }) {
-  const { today, counts, meds, members, who, setWho, take, later, undo, error, reload } = props;
+  const { today, counts, meds, members, who, setWho, take, later, undo, remove, onEdit, reload, say } = props;
   const others = useMemo(
     () =>
       [...(today?.overdue ?? []), ...(today?.due ?? [])].filter(
-        (t) => t.category !== "medicine"
+        (t) => t.task_type !== "medication"
       ),
     [today]
   );
@@ -450,8 +626,11 @@ function TodayTab(props: {
     <>
       {counts.total === 0 && (
         <div className="card">
-          <p className="empty">No tasks yet — add one with the + button below.</p>
-          <button className="btn-ghost" onClick={() => api.seed().then(reload)}>
+          <p className="empty">No tasks yet — add one with the button above.</p>
+          <button
+            className="btn-ghost"
+            onClick={() => api.seed().then(() => { reload(); say("Demo tasks loaded."); })}
+          >
             Load demo tasks
           </button>
         </div>
@@ -464,11 +643,11 @@ function TodayTab(props: {
               <span className="ic">
                 <Icon name="pill" size={18} />
               </span>{" "}
-              Medications Today
+              Medications Today ({meds.length})
             </h2>
           </div>
           {meds.length ? (
-            meds.map((t) => <MedCard key={t.id} t={t} take={take} later={later} />)
+            meds.map((t) => <MedCard key={t.id} t={t} take={take} later={later} remove={remove} onEdit={onEdit} />)
           ) : (
             <p className="empty">No medicines pending.</p>
           )}
@@ -478,11 +657,11 @@ function TodayTab(props: {
               <span className="ic">
                 <Icon name="clipboard-list" size={18} />
               </span>{" "}
-              Other Tasks
+              Other Tasks ({others.length})
             </h2>
           </div>
           {others.length ? (
-            others.map((t) => <TaskRow key={t.id} t={t} take={take} />)
+            others.map((t) => <TaskRow key={t.id} t={t} take={take} remove={remove} onEdit={onEdit} />)
           ) : (
             <p className="empty">Nothing else pending.</p>
           )}
@@ -492,20 +671,20 @@ function TodayTab(props: {
               <span className="ic">
                 <Icon name="circle-check" size={18} />
               </span>{" "}
-              Done today
+              Done today ({today?.done.length ?? 0})
             </h2>
           </div>
           {today?.done.length ? (
             today.done.map((t) => (
               <div key={t.id} className="trow done">
-                <button className="check on" onClick={() => undo(t)} aria-label="Reopen" title="Tap to reopen">
+                <button className="check on" onClick={() => undo(t)} aria-label={`Reopen ${t.title}`} title="Tap to reopen">
                   <Icon name="check" size={16} />
                 </button>
                 <div>
                   <div className="tt">{t.title}</div>
                   <div className="byline">
                     {t.completed_by_name ? `by ${t.completed_by_name}` : ""}
-                    {t.completed_at ? ` · ${fmtTime(t.completed_at)}` : ""} · tap check to undo
+                    {t.completed_at ? ` · ${relTime(t.completed_at)}` : ""} · tap check to undo
                   </div>
                 </div>
               </div>
@@ -528,42 +707,17 @@ function TodayTab(props: {
           <div className="card">
             <div className="who">
               {members.map((m) => (
-                <button
-                  key={m.id}
-                  className={who === m.id ? "sel" : ""}
-                  onClick={() => setWho(m.id)}
-                >
+                <button key={m.id} className={who === m.id ? "sel" : ""} onClick={() => setWho(m.id)}>
                   {m.name}
                 </button>
               ))}
             </div>
+            <p className="demo-note">Demo mode — no login. Your pick is recorded on every task you complete.</p>
           </div>
-          <AskBox />
-          {error && <p className="err">{error}</p>}
+          <AskBox say={say} />
         </div>
       </div>
     </>
-  );
-}
-
-function TaskRow({ t, take }: { t: Task; take: (t: Task) => void }) {
-  const over = new Date(t.due_at).getTime() < Date.now();
-  return (
-    <div className={`trow${over ? " overdue" : ""}`}>
-      <button className="check" onClick={() => take(t)} aria-label="Mark done">
-        <Icon name="check" size={16} />
-      </button>
-      <div>
-        <div className="tt">{t.title}</div>
-        <div className="med-meta">
-          <span className="ic">
-            <Icon name={CAT_ICON[t.category] ?? "clipboard-list"} size={14} />
-          </span>{" "}
-          {fmtTime(t.due_at)}
-        </div>
-      </div>
-      <span className={`tag${over ? " red" : " amber"}`}>{over ? "Overdue" : "Due"}</span>
-    </div>
   );
 }
 
@@ -575,14 +729,14 @@ function Ring({ done, total }: { done: number; total: number }) {
   const frac = total ? done / total : 0;
   return (
     <div className="ring-wrap">
-      <svg width="88" height="88" viewBox="0 0 88 88">
+      <svg width="88" height="88" viewBox="0 0 88 88" role="img" aria-label={`${done} of ${total} doses taken`}>
         <circle cx="44" cy="44" r={R} fill="none" stroke="#e8e8ed" strokeWidth="10" />
         <circle
           cx="44" cy="44" r={R} fill="none" stroke="#34c759" strokeWidth="10"
           strokeLinecap="round" strokeDasharray={C}
           strokeDashoffset={C * (1 - frac)} transform="rotate(-90 44 44)"
         />
-        <text x="44" y="50" textAnchor="middle" fontSize="20" fontWeight="800" fill="#10231c">
+        <text x="44" y="50" textAnchor="middle" fontSize="20" fontWeight="700" fill="#1d1d1f">
           {done}/{total}
         </text>
       </svg>
@@ -599,26 +753,27 @@ function MedsTab({
   today,
   take,
   later,
+  remove,
+  onEdit,
 }: {
   today: Today | null;
   take: (t: Task) => void;
   later: (t: Task) => void;
+  remove: (t: Task) => void;
+  onEdit: (t: Task) => void;
 }) {
   const all = useMemo(
     () =>
       [...(today?.overdue ?? []), ...(today?.due ?? []), ...(today?.done ?? [])].filter(
-        (t) => t.category === "medicine"
+        (t) => t.task_type === "medication"
       ),
     [today]
   );
-  const done = all.filter((t) => t.status === "done").length;
+  const done = all.filter((t) => t.status === "completed").length;
   return (
     <>
       <section className="feature">
-        <img
-          src="/images/meds-pills.jpg"
-          alt="Colorful daily medication pills and capsules"
-        />
+        <img src="/images/meds-pills.jpg" alt="Colorful daily medication pills and capsules" />
         <div className="feature-copy">
           <h2>Medicines, on time, every time.</h2>
           <p>
@@ -637,7 +792,7 @@ function MedsTab({
       </section>
       {all.length ? (
         <div className="cards-2">
-          {all.map((t) => <MedCard key={t.id} t={t} take={take} later={later} />)}
+          {all.map((t) => <MedCard key={t.id} t={t} take={take} later={later} remove={remove} onEdit={onEdit} />)}
         </div>
       ) : (
         <p className="empty">No medications scheduled.</p>
@@ -670,7 +825,7 @@ function ActivityTab({ today }: { today: Today | null }) {
                 </span>
                 <div className="tt">{t.title}</div>
                 <div className="ts">
-                  {t.completed_at ? fmtTime(t.completed_at) : fmtTime(t.due_at)}
+                  {t.completed_at ? relTime(t.completed_at) : fmtTime(t.due_at)}
                   {t.completed_by_name ? ` · by ${t.completed_by_name}` : ""}
                 </div>
               </div>
@@ -708,25 +863,28 @@ function FamilyTab({
   members,
   today,
   reload,
+  say,
+  setWho,
+  go,
 }: {
   members: Member[];
   today: Today | null;
   reload: () => void;
+  say: (m: string) => void;
+  setWho: (id: number) => void;
+  go: (t: Tab) => void;
 }) {
   const [name, setName] = useState("");
   const doneBy = useMemo(() => {
     const m: Record<number, number> = {};
     for (const t of today?.done ?? [])
-      if (t.completed_by_id) m[t.completed_by_id] = (m[t.completed_by_id] ?? 0) + 1;
+      if (t.completed_by_member_id) m[t.completed_by_member_id] = (m[t.completed_by_member_id] ?? 0) + 1;
     return m;
   }, [today]);
   return (
     <div className="narrow">
       <section className="feature flip">
-        <img
-          src="/images/care-call.jpg"
-          alt="A doctor coordinating care over the phone"
-        />
+        <img src="/images/care-call.jpg" alt="A doctor coordinating care over the phone" />
         <div className="feature-copy">
           <h2>One family, one place.</h2>
           <p>
@@ -736,14 +894,14 @@ function FamilyTab({
         </div>
       </section>
       {members.map((m) => (
-        <div key={m.id} className="fam-row">
+        <button key={m.id} className="fam-row as-btn" onClick={() => { setWho(m.id); go("today"); say(`Helping as ${m.name}.`); }}>
           <div className="fam-av">{m.name.slice(0, 1)}</div>
-          <div>
+          <div style={{ textAlign: "left" }}>
             <div className="fam-name">{m.name}</div>
-            <div className="fam-sub">{m.relation || "Family"}</div>
+            <div className="fam-sub">{m.relationship || "Family"}</div>
           </div>
           <span className="count-badge">{doneBy[m.id] ?? 0} done today</span>
-        </div>
+        </button>
       ))}
       <section className="card">
         <div className="prog-top">
@@ -759,6 +917,7 @@ function FamilyTab({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Name, e.g. Meera"
+            aria-label="Family member name"
           />
           <button
             className="ask-go"
@@ -767,6 +926,7 @@ function FamilyTab({
               await api.addMember(name.trim());
               setName("");
               await reload();
+              say("Family member added.");
             }}
           >
             Add
@@ -779,23 +939,38 @@ function FamilyTab({
 
 /* ================= Ask ================= */
 
-function AskBox() {
+function AskBox({ say }: { say: (m: string) => void }) {
   const [q, setQ] = useState("");
   const [ans, setAns] = useState("");
   const [asking, setAsking] = useState(false);
-  async function ask() {
-    if (!q.trim() || asking) return;
+  const [interactionId, setInteractionId] = useState<number | null>(null);
+  const abort = useRef<AbortController | null>(null);
+
+  async function ask(question: string) {
+    const query = question.trim();
+    if (!query || asking) return;
     setAsking(true);
     setAns("");
-    await api.ask(
-      q.trim(),
-      (tok) => setAns((a) => a + tok),
-      () => setAsking(false),
-      () => {
-        setAns("Sorry — the assistant is unavailable right now.");
+    setInteractionId(null);
+    abort.current = new AbortController();
+    api.ask(query, {
+      signal: abort.current.signal,
+      onToken: (tok) => setAns((a) => a + tok),
+      onDone: (id) => {
         setAsking(false);
-      }
-    );
+        setInteractionId(id);
+        abort.current = null;
+      },
+      onError: () => {
+        setAns("Sorry — the assistant is unavailable right now. Please try again.");
+        setAsking(false);
+        abort.current = null;
+        say("Assistant unavailable.");
+      },
+    });
+  }
+  function stop() {
+    abort.current?.abort();
   }
   return (
     <section className="card">
@@ -807,89 +982,175 @@ function AskBox() {
           Ask about today
         </span>
       </div>
+      <p className="demo-note">Answers come from today's real tasks — never guesses.</p>
+      <div className="chips">
+        {PROMPTS.map((p) => (
+          <button key={p} className="chip" disabled={asking} onClick={() => { setQ(p); ask(p); }}>
+            {p}
+          </button>
+        ))}
+      </div>
       <div className="ask-row" style={{ marginTop: 10 }}>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder='e.g. "What is still pending?"'
-          onKeyDown={(e) => e.key === "Enter" && ask()}
+          aria-label="Ask about today"
+          onKeyDown={(e) => e.key === "Enter" && ask(q)}
         />
-        <button className="ask-go" disabled={asking} onClick={ask}>
-          {asking ? "Thinking" : "Ask"}
-        </button>
+        {asking ? (
+          <button className="ask-go" onClick={stop}>
+            Stop
+          </button>
+        ) : (
+          <button className="ask-go" onClick={() => ask(q)}>
+            Ask
+          </button>
+        )}
       </div>
-      {(ans || asking) && <p className="answer">{ans || "Thinking…"}</p>}
+      {(ans || asking) && (
+        <div>
+          <p className="answer" aria-live="polite">
+            {ans || "Thinking…"}
+          </p>
+          {interactionId !== null && <p className="demo-note">Logged for review · #{interactionId}</p>}
+        </div>
+      )}
     </section>
   );
 }
 
-/* ================= Add sheet ================= */
+/* ================= Task sheet (add + edit) ================= */
 
-function AddSheet({ close, reload }: { close: () => void; reload: () => void }) {
-  const [title, setTitle] = useState("");
-  const [cat, setCat] = useState("medicine");
-  const [due, setDue] = useState(() => toLocalInput(new Date(Date.now() + 3600e3)));
+function TaskSheet({
+  editing,
+  members,
+  close,
+  reload,
+  say,
+}: {
+  editing?: Task;
+  members: Member[];
+  close: () => void;
+  reload: () => void;
+  say: (m: string) => void;
+}) {
+  const [title, setTitle] = useState(editing?.title ?? "");
+  const [description, setDescription] = useState(editing?.description ?? "");
+  const [type, setType] = useState(editing?.task_type ?? "medication");
+  const [priority, setPriority] = useState(editing?.priority ?? "normal");
+  const [assigned, setAssigned] = useState<string>(String(editing?.assigned_member_id ?? ""));
+  const [due, setDue] = useState(() =>
+    editing
+      ? toLocalInput(new Date(editing.due_at))
+      : toLocalInput(new Date(Date.now() + 3600e3))
+  );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+
   async function save() {
     if (!title.trim()) {
-      setErr("Please enter what needs doing.");
+      setErr("Please enter a title — e.g. Evening BP tablet.");
+      return;
+    }
+    if (!due) {
+      setErr("Please pick a date and time.");
       return;
     }
     setBusy(true);
+    setErr("");
     try {
-      const r = await api.recipients();
-      if (!r[0]) {
+      const recips = await api.recipients();
+      if (!recips[0]) {
         await api.seed();
       }
-      const recips = await api.recipients();
-      await api.addTask({
+      const list = await api.recipients();
+      const payload = {
         title: title.trim(),
-        category: cat,
+        description: description.trim(),
+        task_type: type,
+        priority,
         due_at: new Date(due).toISOString(),
-        recipient_id: recips[0].id,
-      });
+        care_recipient_id: list[0].id,
+        assigned_member_id: assigned ? Number(assigned) : null,
+      };
+      if (editing) {
+        await api.updateTask(editing.id, { ...payload, version: editing.version });
+        say("Task updated.");
+      } else {
+        await api.addTask(payload);
+        say("Task added to today.");
+      }
       await reload();
       close();
-    } catch {
-      setErr("Could not add task — try again.");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not save — try again.");
     } finally {
       setBusy(false);
     }
   }
   return (
     <div className="sheet-bg" onClick={close}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet" role="dialog" aria-label={editing ? "Edit task" : "Add task"} onClick={(e) => e.stopPropagation()}>
         <div className="grip" />
         <div className="sheet-head">
           <span className="prog-label" style={{ fontSize: 19 }}>
             <span className="ic">
-              <Icon name="plus" size={19} />
+              <Icon name={editing ? "pencil" : "plus"} size={19} />
             </span>{" "}
-            Add a task
+            {editing ? "Edit task" : "Add a task"}
           </span>
           <button className="icon-btn" onClick={close} aria-label="Close">
             <Icon name="x" size={20} />
           </button>
         </div>
-        <label>What needs doing?</label>
+        <label htmlFor="task-title">Title *</label>
         <input
+          id="task-title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. Evening BP tablet"
         />
-        <label>Type</label>
-        <select value={cat} onChange={(e) => setCat(e.target.value)}>
-          {CATS.map((c) => (
-            <option key={c} value={c}>
-              {c}
+        <label htmlFor="task-desc">Description (optional)</label>
+        <input
+          id="task-desc"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="e.g. With dinner, 8 pm"
+        />
+        <div className="form-2">
+          <div>
+            <label htmlFor="task-type">Type</label>
+            <select id="task-type" value={type} onChange={(e) => setType(e.target.value)}>
+              {TYPES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="task-priority">Priority</label>
+            <select id="task-priority" value={priority} onChange={(e) => setPriority(e.target.value)}>
+              <option value="low">low</option>
+              <option value="normal">normal</option>
+              <option value="high">high</option>
+            </select>
+          </div>
+        </div>
+        <label htmlFor="task-due">Due date & time *</label>
+        <input id="task-due" type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
+        <label htmlFor="task-assigned">Assigned to (optional)</label>
+        <select id="task-assigned" value={assigned} onChange={(e) => setAssigned(e.target.value)}>
+          <option value="">Nobody yet</option>
+          {members.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
             </option>
           ))}
         </select>
-        <label>Due when?</label>
-        <input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
         <button className="btn-primary" disabled={busy} onClick={save}>
-          {busy ? "Adding…" : "Add task"}
+          {busy ? "Saving…" : editing ? "Save changes" : "Add task"}
         </button>
         {err && <p className="err">{err}</p>}
       </div>

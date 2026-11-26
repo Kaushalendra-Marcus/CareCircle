@@ -51,6 +51,13 @@ export function Icon({ name, size = 20 }: { name: string; size?: number }) {
     case "circle-check": return (<svg {...p}><circle cx="12" cy="12" r="10" />
   <path d="m16 9-5.5 5.5L8 12" /></svg>);
     case "heart": return (<svg {...p}><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5" /></svg>);
+    case "pencil": return (<svg {...p}><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+  <path d="m15 5 4 4" /></svg>);
+    case "trash": return (<svg {...p}><path d="M10 11v6" />
+  <path d="M14 11v6" />
+  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+  <path d="M3 6h18" />
+  <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>);
     default: return (<svg {...p}><circle cx="12" cy="12" r="9" /></svg>);
   }
 }

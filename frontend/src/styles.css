@@ -306,6 +306,44 @@ input:focus, select:focus { outline: none; border-color: var(--blue); box-shadow
   padding: 18px 0 8px; margin-top: 18px; border-top: 1px solid var(--rule);
 }
 .overdue-label { color: var(--red); }
+/* ---------- toast ---------- */
+.toast {
+  position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%);
+  background: var(--ink); color: #fff; z-index: 60;
+  font-size: 15px; font-weight: 600; padding: 12px 22px; border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); max-width: 92vw; text-align: center;
+}
+@media (min-width: 900px) { .toast { bottom: 32px; } }
+/* ---------- skeleton ---------- */
+.skel { pointer-events: none; }
+.skel-line { height: 16px; border-radius: 8px; background: var(--faint); margin: 10px 0; animation: pulse 1.2s ease-in-out infinite; }
+.skel-line.w60 { width: 60%; }
+.skel-line.w40 { width: 40%; }
+@keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+/* ---------- chips ---------- */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.chip {
+  border: 1px solid var(--rule); background: #fff; cursor: pointer;
+  font-family: var(--font); font-size: 14px; font-weight: 500; color: var(--ink);
+  padding: 8px 14px; border-radius: 999px;
+}
+.chip:hover:not(:disabled) { border-color: var(--ink); }
+.chip:disabled { opacity: 0.5; }
+.demo-note { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+/* ---------- row actions / mini buttons ---------- */
+.row-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.mini-btn {
+  border: 1px solid var(--rule); background: #fff; cursor: pointer;
+  font-family: var(--font); font-size: 13px; font-weight: 600; color: var(--ink);
+  padding: 7px 13px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.mini-btn:hover { border-color: var(--ink); }
+.mini-btn.danger { color: var(--red); border-color: var(--red); }
+.mini-btn.danger:hover { background: var(--red-bg); }
+.form-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.fam-row.as-btn { width: 100%; border: none; cursor: pointer; font-family: var(--font); text-align: left; }
+.fam-row.as-btn:hover { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.1); }
 /* ---------- hero: big landing (aurviz headline block + photography) ---------- */
 .hero {
   background: #fff; border-radius: 28px; box-shadow: var(--shadow);
