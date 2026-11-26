@@ -68,8 +68,12 @@ passwords — deliberate for a 4–6h scope).
 - **No auth:** the member picker ("Who is doing it?") records attribution
   without passwords — right tradeoff for tired caregivers in a pilot, and
   stated in the brief as optional.
-- **Frontend has no UI framework** — hand-rolled CSS, 19px+ base type,
-  full-width buttons, nothing behind menus.
+- **Frontend has no UI framework** — hand-rolled CSS in a mint care-app
+  style: greeting + "Today's Plan" header, Daily Progress card, medicine
+  cards with Taken / Later (+2h snooze) pills, adherence ring on the Meds
+  tab, activity timeline, family attribution, bottom tab bar (Today / Meds /
+  Activity / Family) and a ＋ bottom-sheet to add tasks. 17px+ type,
+  nothing behind menus.
 
 ## What I'd do next (with more time)
 
