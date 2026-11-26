@@ -87,6 +87,7 @@ export default function App() {
       ? setError("Tap your name under “Who's helping?” first.")
       : act(() => api.complete(t.id, who, t.version), "Someone just updated this — refreshed.");
   const later = (t: Task) => act(() => api.snooze(t.id, t.version), "Could not snooze — refreshed.");
+  const undo = (t: Task) => act(() => api.reopen(t.id), "Could not reopen — refreshed.");
 
   if (loading) return <div className="phone">Loading…</div>;
 
@@ -124,6 +125,7 @@ export default function App() {
           setWho={setWho}
           take={take}
           later={later}
+          undo={undo}
           error={error}
           reload={load}
         />
@@ -248,10 +250,11 @@ function TodayTab(props: {
   setWho: (id: number) => void;
   take: (t: Task) => void;
   later: (t: Task) => void;
+  undo: (t: Task) => void;
   error: string;
   reload: () => void;
 }) {
-  const { today, counts, meds, members, who, setWho, take, later, error, reload } = props;
+  const { today, counts, meds, members, who, setWho, take, later, undo, error, reload } = props;
   const others = useMemo(
     () =>
       [...(today?.overdue ?? []), ...(today?.due ?? [])].filter(
@@ -287,6 +290,28 @@ function TodayTab(props: {
         others.map((t) => <TaskRow key={t.id} t={t} take={take} />)
       ) : (
         <p className="empty">Nothing else pending. 🎉</p>
+      )}
+
+      <div className="sec-head">
+        <h2>✅ Done today</h2>
+      </div>
+      {today?.done.length ? (
+        today.done.map((t) => (
+          <div key={t.id} className="trow done">
+            <button className="check on" onClick={() => undo(t)} aria-label="Reopen" title="Tap to reopen">
+              ✓
+            </button>
+            <div>
+              <div className="tt">{t.title}</div>
+              <div className="byline">
+                {t.completed_by_name ? `by ${t.completed_by_name}` : ""}
+                {t.completed_at ? ` · ${fmtTime(t.completed_at)}` : ""} · tap ✓ to undo
+              </div>
+            </div>
+          </div>
+        ))
+      ) : (
+        <p className="empty">Nothing done yet today.</p>
       )}
 
       <div className="sec-head">
