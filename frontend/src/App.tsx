@@ -441,9 +441,9 @@ function Ring({ done, total }: { done: number; total: number }) {
   return (
     <div className="ring-wrap">
       <svg width="88" height="88" viewBox="0 0 88 88">
-        <circle cx="44" cy="44" r={R} fill="none" stroke="#dcebe3" strokeWidth="10" />
+        <circle cx="44" cy="44" r={R} fill="none" stroke="#e8e8ed" strokeWidth="10" />
         <circle
-          cx="44" cy="44" r={R} fill="none" stroke="#0ca678" strokeWidth="10"
+          cx="44" cy="44" r={R} fill="none" stroke="#34c759" strokeWidth="10"
           strokeLinecap="round" strokeDasharray={C}
           strokeDashoffset={C * (1 - frac)} transform="rotate(-90 44 44)"
         />
