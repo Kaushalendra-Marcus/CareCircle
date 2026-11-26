@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, fmtTime, type Member, type Task, type Today } from "./api";
+import { Icon } from "./icons";
 import "./styles.css";
 
 type Tab = "today" | "meds" | "activity" | "family";
 const CATS = ["medicine", "appointment", "checkin", "other"];
 const CAT_ICON: Record<string, string> = {
-  medicine: "💊",
-  appointment: "📅",
-  checkin: "📞",
-  other: "📝",
+  medicine: "pill",
+  appointment: "calendar",
+  checkin: "phone",
+  other: "clipboard-list",
 };
 
 function greeting(): string {
@@ -91,22 +92,30 @@ export default function App() {
 
   if (loading) return <div className="site">Loading…</div>;
 
-  const tabs: { id: Tab; label: string; ico: string }[] = [
-    { id: "today", label: "Today", ico: "🏠" },
-    { id: "meds", label: "Meds", ico: "💊" },
-    { id: "activity", label: "Activity", ico: "🕘" },
-    { id: "family", label: "Family", ico: "👪" },
+  const tabs: { id: Tab; label: string; icon: string }[] = [
+    { id: "today", label: "Today", icon: "home" },
+    { id: "meds", label: "Meds", icon: "pill" },
+    { id: "activity", label: "Activity", icon: "activity" },
+    { id: "family", label: "Family", icon: "users" },
   ];
   const me = members.find((m) => m.id === who)?.name ?? "family";
 
   return (
     <div className="site">
       <nav className="navbar">
-        <span className="brand">💚 CareCircle</span>
+        <span className="brand">
+          <span className="brand-mark">
+            <Icon name="activity" size={19} />
+          </span>
+          CareCircle
+        </span>
         <div className="topnav">
           {tabs.map((t) => (
             <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
-              {t.ico} {t.label}
+              <span className="ic">
+                <Icon name={t.icon} size={17} />
+              </span>
+              {t.label}
             </button>
           ))}
         </div>
@@ -119,7 +128,10 @@ export default function App() {
       <header className="topbar">
         <div>
           <div className="greet">
-            ☀️ {greeting()}, <b>{me}</b>
+            <span className="ic">
+              <Icon name="sun" size={16} />
+            </span>{" "}
+            {greeting()}, <b>{me}</b>
           </div>
           <h1 className="plan">
             {tab === "today"
@@ -160,24 +172,27 @@ export default function App() {
       )}
 
       <button className="fab" onClick={() => setSheet(true)} aria-label="Add task">
-        +
+        <Icon name="plus" size={28} />
       </button>
       {sheet && <AddSheet close={() => setSheet(false)} reload={load} />}
 
       <nav className="tabbar">
-        <button className={tab === "today" ? "on" : ""} onClick={() => setTab("today")}>
-          <span className="ico">🏠</span>Today
-        </button>
-        <button className={tab === "meds" ? "on" : ""} onClick={() => setTab("meds")}>
-          <span className="ico">💊</span>Meds
-        </button>
-        <button className={tab === "activity" ? "on" : ""} onClick={() => setTab("activity")}>
-          <span className="ico">🕘</span>Activity
-        </button>
-        <button className={tab === "family" ? "on" : ""} onClick={() => setTab("family")}>
-          <span className="ico">👪</span>Family
-        </button>
+        {tabs.map((t) => (
+          <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
+            <span className="ico">
+              <Icon name={t.icon} size={22} />
+            </span>
+            {t.label}
+          </button>
+        ))}
       </nav>
+
+      <footer className="site-foot">
+        <span className="ic">
+          <Icon name="heart" size={15} />
+        </span>{" "}
+        CareCircle Lite · one shared place for {recipient}'s care
+      </footer>
     </div>
   );
 }
@@ -189,7 +204,12 @@ function ProgressCard({ counts }: { counts: { overdue: number; due: number; done
   return (
     <section className="card">
       <div className="prog-top">
-        <span className="prog-label">✨ Daily Progress</span>
+        <span className="prog-label">
+          <span className="ic">
+            <Icon name="sparkles" size={17} />
+          </span>{" "}
+          Daily Progress
+        </span>
         <span className="prog-pct">{counts.done}/{counts.total} · {pct}% done</span>
       </div>
       <div className="bar">
@@ -226,14 +246,16 @@ function MedCard({
   if (t.status === "done")
     return (
       <div className="med done">
-        <div className="pill-ico med-ico">{CAT_ICON[t.category] ?? "📝"}</div>
+        <div className="pill-ico med-ico">
+          <Icon name={CAT_ICON[t.category] ?? "clipboard-list"} size={22} />
+        </div>
         <div className="med-body">
           <div className="med-name">{t.title}</div>
           <div className="med-meta">
             {t.category} · was due {fmtTime(t.due_at)}
           </div>
           <span className="chip-taken">
-            ✓ Taken{t.completed_by_name ? ` · ${t.completed_by_name}` : ""}
+            Taken{t.completed_by_name ? ` · ${t.completed_by_name}` : ""}
           </span>
         </div>
       </div>
@@ -251,10 +273,16 @@ function MedCard({
         </div>
         <div className="actions">
           <button className="btn-taken" onClick={() => take(t)}>
-            ✓ Taken
+            <span className="ic">
+              <Icon name="check" size={16} />
+            </span>{" "}
+            Taken
           </button>
           <button className="btn-later" onClick={() => later(t)}>
-            🕐 Later
+            <span className="ic">
+              <Icon name="clock" size={16} />
+            </span>{" "}
+            Later
           </button>
         </div>
       </div>
@@ -287,7 +315,7 @@ function TodayTab(props: {
     <>
       {counts.total === 0 && (
         <div className="card">
-          <p className="empty">No tasks yet — add one with ＋ below.</p>
+          <p className="empty">No tasks yet — add one with the + button below.</p>
           <button className="btn-ghost" onClick={() => api.seed().then(reload)}>
             Load demo tasks
           </button>
@@ -297,7 +325,12 @@ function TodayTab(props: {
       <div className="cols cols-2">
         <div>
           <div className="sec-head">
-            <h2>💊 Medications Today</h2>
+            <h2>
+              <span className="ic">
+                <Icon name="pill" size={18} />
+              </span>{" "}
+              Medications Today
+            </h2>
           </div>
           {meds.length ? (
             meds.map((t) => <MedCard key={t.id} t={t} take={take} later={later} />)
@@ -306,28 +339,38 @@ function TodayTab(props: {
           )}
 
           <div className="sec-head">
-            <h2>📋 Other Tasks</h2>
+            <h2>
+              <span className="ic">
+                <Icon name="clipboard-list" size={18} />
+              </span>{" "}
+              Other Tasks
+            </h2>
           </div>
           {others.length ? (
             others.map((t) => <TaskRow key={t.id} t={t} take={take} />)
           ) : (
-            <p className="empty">Nothing else pending. 🎉</p>
+            <p className="empty">Nothing else pending.</p>
           )}
 
           <div className="sec-head">
-            <h2>✅ Done today</h2>
+            <h2>
+              <span className="ic">
+                <Icon name="circle-check" size={18} />
+              </span>{" "}
+              Done today
+            </h2>
           </div>
           {today?.done.length ? (
             today.done.map((t) => (
               <div key={t.id} className="trow done">
                 <button className="check on" onClick={() => undo(t)} aria-label="Reopen" title="Tap to reopen">
-                  ✓
+                  <Icon name="check" size={16} />
                 </button>
                 <div>
                   <div className="tt">{t.title}</div>
                   <div className="byline">
                     {t.completed_by_name ? `by ${t.completed_by_name}` : ""}
-                    {t.completed_at ? ` · ${fmtTime(t.completed_at)}` : ""} · tap ✓ to undo
+                    {t.completed_at ? ` · ${fmtTime(t.completed_at)}` : ""} · tap check to undo
                   </div>
                 </div>
               </div>
@@ -340,7 +383,12 @@ function TodayTab(props: {
         <div className="aside">
           <ProgressCard counts={counts} />
           <div className="sec-head">
-            <h2>Who's helping?</h2>
+            <h2>
+              <span className="ic">
+                <Icon name="users" size={18} />
+              </span>{" "}
+              Who's helping?
+            </h2>
           </div>
           <div className="card">
             <div className="who">
@@ -368,12 +416,15 @@ function TaskRow({ t, take }: { t: Task; take: (t: Task) => void }) {
   return (
     <div className={`trow${over ? " overdue" : ""}`}>
       <button className="check" onClick={() => take(t)} aria-label="Mark done">
-        ✓
+        <Icon name="check" size={16} />
       </button>
       <div>
         <div className="tt">{t.title}</div>
         <div className="med-meta">
-          {CAT_ICON[t.category] ?? ""} {fmtTime(t.due_at)}
+          <span className="ic">
+            <Icon name={CAT_ICON[t.category] ?? "clipboard-list"} size={14} />
+          </span>{" "}
+          {fmtTime(t.due_at)}
         </div>
       </div>
       <span className={`tag${over ? " red" : " amber"}`}>{over ? "Overdue" : "Due"}</span>
@@ -455,13 +506,20 @@ function ActivityTab({ today }: { today: Today | null }) {
     <div className="narrow">
       <section className="card">
         <div className="prog-top">
-          <span className="prog-label">✅ Done today ({done.length})</span>
+          <span className="prog-label">
+            <span className="ic">
+              <Icon name="circle-check" size={17} />
+            </span>{" "}
+            Done today ({done.length})
+          </span>
         </div>
         {done.length ? (
           <div className="tl">
             {done.map((t) => (
               <div key={t.id} className="tl-item">
-                <span className="tl-dot">✓</span>
+                <span className="tl-dot">
+                  <Icon name="check" size={11} />
+                </span>
                 <div className="tt">{t.title}</div>
                 <div className="ts">
                   {t.completed_at ? fmtTime(t.completed_at) : fmtTime(t.due_at)}
@@ -471,14 +529,17 @@ function ActivityTab({ today }: { today: Today | null }) {
             ))}
           </div>
         ) : (
-          <p className="empty">Nothing done yet — let's go! 💪</p>
+          <p className="empty">Nothing done yet — tasks you complete will appear here.</p>
         )}
       </section>
       {(today?.overdue.length ?? 0) > 0 && (
         <section className="card">
           <div className="prog-top">
-            <span className="prog-label" style={{ color: "#df3b3b" }}>
-              ⚠️ Still overdue ({today?.overdue.length})
+            <span className="prog-label overdue-label">
+              <span className="ic">
+                <Icon name="triangle-alert" size={17} />
+              </span>{" "}
+              Still overdue ({today?.overdue.length})
             </span>
           </div>
           {today?.overdue.map((t) => (
@@ -520,12 +581,17 @@ function FamilyTab({
             <div className="fam-name">{m.name}</div>
             <div className="fam-sub">{m.relation || "Family"}</div>
           </div>
-          <span className="count-badge">✓ {doneBy[m.id] ?? 0} today</span>
+          <span className="count-badge">{doneBy[m.id] ?? 0} done today</span>
         </div>
       ))}
       <section className="card">
         <div className="prog-top">
-          <span className="prog-label">＋ Add family member</span>
+          <span className="prog-label">
+            <span className="ic">
+              <Icon name="plus" size={17} />
+            </span>{" "}
+            Add family member
+          </span>
         </div>
         <div className="ask-row" style={{ marginTop: 10 }}>
           <input
@@ -573,7 +639,12 @@ function AskBox() {
   return (
     <section className="card">
       <div className="prog-top">
-        <span className="prog-label">💬 Ask about today</span>
+        <span className="prog-label">
+          <span className="ic">
+            <Icon name="message-circle" size={17} />
+          </span>{" "}
+          Ask about today
+        </span>
       </div>
       <div className="ask-row" style={{ marginTop: 10 }}>
         <input
@@ -583,10 +654,10 @@ function AskBox() {
           onKeyDown={(e) => e.key === "Enter" && ask()}
         />
         <button className="ask-go" disabled={asking} onClick={ask}>
-          {asking ? "…" : "Ask"}
+          {asking ? "Thinking" : "Ask"}
         </button>
       </div>
-      {(ans || asking) && <p className="answer">{ans || "…"}</p>}
+      {(ans || asking) && <p className="answer">{ans || "Thinking…"}</p>}
     </section>
   );
 }
@@ -629,8 +700,16 @@ function AddSheet({ close, reload }: { close: () => void; reload: () => void }) 
     <div className="sheet-bg" onClick={close}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="grip" />
-        <div className="prog-top">
-          <span className="prog-label" style={{ fontSize: 19 }}>＋ Add a task</span>
+        <div className="sheet-head">
+          <span className="prog-label" style={{ fontSize: 19 }}>
+            <span className="ic">
+              <Icon name="plus" size={19} />
+            </span>{" "}
+            Add a task
+          </span>
+          <button className="icon-btn" onClick={close} aria-label="Close">
+            <Icon name="x" size={20} />
+          </button>
         </div>
         <label>What needs doing?</label>
         <input
