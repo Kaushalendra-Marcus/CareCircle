@@ -70,6 +70,14 @@ export const api = {
     }),
   reopen: (id: number) =>
     req<Task>(`/api/tasks/${id}/reopen`, { method: "POST", body: "{}" }),
+  snooze: (id: number, version: number, hours = 2) =>
+    req<Task>(`/api/tasks/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        due_at: new Date(Date.now() + hours * 3600e3).toISOString(),
+        version,
+      }),
+    }),
   seed: () => req<{ seeded: boolean }>("/api/seed", { method: "POST" }),
 
   /** Stream the assistant answer. Calls onToken for each word, onDone at end. */
