@@ -148,30 +148,35 @@ export default function App() {
       )}
 
       <header className="topbar">
-        <div>
-          <p className="hero-eyebrow">
-            CareCircle for <b>{recipient}</b> · Helping as <b>{me}</b>
-          </p>
-          <h1 className="plan">
-            {tab === "today"
-              ? "Today's Plan."
-              : tab === "meds"
-              ? "Medications."
-              : tab === "activity"
-              ? "Activity."
-              : "Family."}
-          </h1>
-          <p className="date-line">
-            {tab === "today"
-              ? "What needs doing, what's done, and who's helping — at a glance."
-              : tab === "meds"
-              ? "Every dose for today, with adherence as you go."
-              : tab === "activity"
-              ? "Everything the family completed today."
-              : "Everyone sharing the care."}{" "}
-            {today ? prettyDate(today.date + "T12:00:00") : ""}
-          </p>
-        </div>
+        {tab === "today" ? (
+          <Hero
+            recipient={recipient}
+            me={me}
+            counts={counts}
+            onAdd={() => setSheet(true)}
+          />
+        ) : (
+          <div>
+            <p className="hero-eyebrow">
+              CareCircle for <b>{recipient}</b>
+            </p>
+            <h1 className="plan">
+              {tab === "meds"
+                ? "Medications."
+                : tab === "activity"
+                ? "Activity."
+                : "Family."}
+            </h1>
+            <p className="date-line">
+              {tab === "meds"
+                ? "Every dose for today, with adherence as you go."
+                : tab === "activity"
+                ? "Everything the family completed today."
+                : "Everyone sharing the care."}{" "}
+              {today ? prettyDate(today.date + "T12:00:00") : ""}
+            </p>
+          </div>
+        )}
       </header>
 
       {tab === "today" && (
@@ -256,6 +261,74 @@ export default function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+/* ================= Hero (big landing) ================= */
+
+function Hero({
+  recipient,
+  me,
+  counts,
+  onAdd,
+}: {
+  recipient: string;
+  me: string;
+  counts: { overdue: number; due: number; done: number; total: number };
+  onAdd: () => void;
+}) {
+  return (
+    <section className="hero">
+      <div className="hero-grid">
+        <div className="hero-copy">
+          <p className="hero-eyebrow">
+            CareCircle for <b>{recipient}</b> · Helping as <b>{me}</b>
+          </p>
+          <h1 className="hero-title">One shared place for the family's care.</h1>
+          <p className="hero-sub">
+            See what's overdue, due and done today — medicines, appointments
+            and check-ins — and who did what, at a glance.
+          </p>
+          <div className="hero-ctas">
+            <button className="btn-solid-sm btn-lg" onClick={onAdd}>
+              <span className="ic">
+                <Icon name="plus" size={16} />
+              </span>
+              Add a task
+            </button>
+            <button
+              className="btn-ghost btn-lg"
+              style={{ width: "auto", marginTop: 0 }}
+              onClick={() =>
+                document.getElementById("plan")?.scrollIntoView({ behavior: "smooth" })
+              }
+            >
+              See today's plan
+            </button>
+          </div>
+          <div className="hero-stats">
+            <div>
+              <div className="n red">{counts.overdue}</div>
+              <div className="l">Overdue</div>
+            </div>
+            <div>
+              <div className="n amber">{counts.due}</div>
+              <div className="l">Due today</div>
+            </div>
+            <div>
+              <div className="n green">{counts.done}</div>
+              <div className="l">Done</div>
+            </div>
+          </div>
+        </div>
+        <div className="hero-img">
+          <img
+            src="/images/hero-hands.jpg"
+            alt="A family member gently holding their parent's hand in warm sunlight"
+          />
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -384,7 +457,7 @@ function TodayTab(props: {
         </div>
       )}
 
-      <div className="cols cols-2">
+      <div className="cols cols-2" id="plan">
         <div>
           <div className="sec-head">
             <h2>
@@ -541,6 +614,19 @@ function MedsTab({
   const done = all.filter((t) => t.status === "done").length;
   return (
     <>
+      <section className="feature">
+        <img
+          src="/images/meds-pills.jpg"
+          alt="Colorful daily medication pills and capsules"
+        />
+        <div className="feature-copy">
+          <h2>Medicines, on time, every time.</h2>
+          <p>
+            Every dose for today in one list. Tap Taken when it's done, or
+            Later to snooze it by two hours — the family sees it all.
+          </p>
+        </div>
+      </section>
       <section className="card">
         <div className="prog-top">
           <span className="prog-label">TODAY'S ADHERENCE</span>
@@ -636,6 +722,19 @@ function FamilyTab({
   }, [today]);
   return (
     <div className="narrow">
+      <section className="feature flip">
+        <img
+          src="/images/care-call.jpg"
+          alt="A doctor coordinating care over the phone"
+        />
+        <div className="feature-copy">
+          <h2>One family, one place.</h2>
+          <p>
+            No more "who gave the evening medicine?" over calls and chats —
+            every dose and task shows who did it and when.
+          </p>
+        </div>
+      </section>
       {members.map((m) => (
         <div key={m.id} className="fam-row">
           <div className="fam-av">{m.name.slice(0, 1)}</div>
