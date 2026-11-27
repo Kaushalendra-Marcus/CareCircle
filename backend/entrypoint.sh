@@ -3,10 +3,12 @@
 set -e
 echo "Waiting for database..."
 python - <<'EOF'
-import os, time
+import os, re, time
 from sqlalchemy import create_engine, text
 
-url = os.environ["DATABASE_URL"]
+raw = os.environ["DATABASE_URL"]
+url = ("postgresql+psycopg://" + raw[len("postgresql://"):]
+       if raw.startswith("postgresql://") else raw)
 for i in range(60):
     try:
         eng = create_engine(url)
