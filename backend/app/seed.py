@@ -52,12 +52,12 @@ def seed_demo(db: Session) -> dict:
     created = 0
     for title, ttype, off, status, who, assignee, desc in specs:
         due = now + off
+        # Strictly idempotent: one demo task per title. Re-seeding never
+        # duplicates; /seed/reset deletes first when a refresh is wanted.
         exists = db.scalar(
             select(CareTask).where(
                 CareTask.care_recipient_id == mum.id,
                 CareTask.title == title,
-                CareTask.due_at >= due - timedelta(minutes=30),
-                CareTask.due_at <= due + timedelta(minutes=30),
             )
         )
         if exists:
