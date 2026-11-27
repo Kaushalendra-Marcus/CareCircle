@@ -3,7 +3,7 @@ import { api, fmtTime, relTime, type Member, type Recipient, type Task, type Tod
 import { Icon } from "./icons";
 import "./styles.css";
 
-type Tab = "today" | "meds" | "activity" | "family";
+type Tab = "today" | "meds" | "activity" | "family" | "assistant";
 const TYPES = ["medication", "appointment", "checkin", "general", "other"];
 const TYPE_ICON: Record<string, string> = {
   medication: "pill",
@@ -17,6 +17,8 @@ const PROMPTS = [
   "Any overdue tasks?",
   "Summarize today.",
   "Did anyone give the morning medicine?",
+  "List family members and their tasks",
+  "What did Priya do today?",
 ];
 
 function toLocalInput(d: Date): string {
@@ -134,6 +136,7 @@ export default function App() {
     { id: "meds", label: "Meds", icon: "pill" },
     { id: "activity", label: "Activity", icon: "activity" },
     { id: "family", label: "Family", icon: "users" },
+    { id: "assistant", label: "Assistant", icon: "message-circle" },
   ];
   const go = (t: Tab) => {
     setTab(t);
@@ -201,13 +204,21 @@ export default function App() {
               CareCircle for <b>{recipient}</b>
             </p>
             <h1 className="plan">
-              {tab === "meds" ? "Medications." : tab === "activity" ? "Activity." : "Family."}
+              {tab === "meds"
+                ? "Medications."
+                : tab === "activity"
+                ? "Activity."
+                : tab === "assistant"
+                ? "Assistant."
+                : "Family."}
             </h1>
             <p className="date-line">
               {tab === "meds"
                 ? "Every dose for today, with adherence as you go."
                 : tab === "activity"
                 ? "Everything the family completed today."
+                : tab === "assistant"
+                ? "Ask anything about today's care — answers come from real records."
                 : "Everyone sharing the care."}{" "}
               {today ? prettyDate(today.date + "T12:00:00") : ""}
             </p>
@@ -248,6 +259,7 @@ export default function App() {
           )}
           {tab === "meds" && <MedsTab today={today} take={take} later={later} remove={remove} onEdit={(t) => setSheet({ editing: t })} />}
           {tab === "activity" && <ActivityTab today={today} />}
+          {tab === "assistant" && <AssistantTab recipient={recipient} say={say} />}
           {tab === "family" && <FamilyTab members={members} today={today} reload={load} say={say} setWho={setWho} go={go} />}
         </>
       )}
@@ -1137,6 +1149,124 @@ function AskBox({ say }: { say: (m: string) => void }) {
         </div>
       )}
     </section>
+  );
+}
+
+/* ================= Assistant tab (full page, session history) ================= */
+
+interface Turn {
+  q: string;
+  ans: string;
+  id: number | null;
+}
+
+function AssistantTab({ recipient, say }: { recipient: string; say: (m: string) => void }) {
+  const [q, setQ] = useState("");
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [asking, setAsking] = useState(false);
+  const abort = useRef<AbortController | null>(null);
+  const bottom = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [turns]);
+
+  async function ask(question: string) {
+    const query = question.trim();
+    if (!query || asking) return;
+    setAsking(true);
+    setTurns((t) => [...t, { q: query, ans: "", id: null }]);
+    setQ("");
+    abort.current = new AbortController();
+    api.ask(query, {
+      signal: abort.current.signal,
+      onToken: (tok) =>
+        setTurns((t) => {
+          const c = [...t];
+          c[c.length - 1] = { ...c[c.length - 1], ans: c[c.length - 1].ans + tok };
+          return c;
+        }),
+      onDone: (id) => {
+        setTurns((t) => {
+          const c = [...t];
+          c[c.length - 1] = { ...c[c.length - 1], id };
+          return c;
+        });
+        setAsking(false);
+        abort.current = null;
+      },
+      onError: () => {
+        setTurns((t) => {
+          const c = [...t];
+          c[c.length - 1] = {
+            ...c[c.length - 1],
+            ans: "Sorry — the assistant is unavailable right now. Please try again.",
+          };
+          return c;
+        });
+        setAsking(false);
+        abort.current = null;
+        say("Assistant unavailable.");
+      },
+    });
+  }
+
+  return (
+    <div className="narrow">
+      <section className="card">
+        <div className="prog-top">
+          <span className="prog-label">
+            <span className="ic">
+              <Icon name="message-circle" size={18} />
+            </span>{" "}
+            Ask about {recipient}'s day
+          </span>
+        </div>
+        <p className="demo-note">
+          Grounded in today's real tasks — who did what, what's pending, what's
+          overdue. Every answer is logged for the family to review.
+        </p>
+        <div className="chips">
+          {PROMPTS.map((p) => (
+            <button key={p} className="chip" disabled={asking} onClick={() => ask(p)}>
+              {p}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {turns.map((t, i) => (
+        <div key={i} className="conv">
+          <div className="q-bubble">{t.q}</div>
+          <p className="answer" aria-live="polite">
+            {t.ans || "Thinking…"}
+          </p>
+          {t.id !== null && <p className="demo-note">Logged for review · #{t.id}</p>}
+        </div>
+      ))}
+
+      <section className="card ask-sticky">
+        <div className="ask-row">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder='Ask, e.g. "List family members and their tasks"'
+            aria-label="Ask the assistant"
+            onKeyDown={(e) => e.key === "Enter" && ask(q)}
+          />
+          {asking ? (
+            <button className="ask-go" onClick={() => abort.current?.abort()}>
+              Stop
+            </button>
+          ) : (
+            <button className="ask-go" onClick={() => ask(q)}>
+              Ask
+            </button>
+          )}
+        </div>
+        <div ref={bottom} />
+      </section>
+    </div>
   );
 }
 
