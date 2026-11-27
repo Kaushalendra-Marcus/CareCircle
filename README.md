@@ -174,6 +174,10 @@ Migrations are verified separately against real Postgres (`alembic upgrade head`
 ## 20. Credits & time
 
 - Icons: Lucide (`lucide-static`, ISC). Photography: Unsplash License
-  (`frontend/public/images/`).
+  (pills, senior portrait) plus Flickr works used unmodified with credit —
+  "A Caregiver Finds the Time" by fairfaxcounty (CC BY-ND), "Medical Care at
+  the Aged Persons Center" by UN Women Gallery (CC BY-NC-ND), and a doctor
+  consultation by ILO in Asia and the Pacific (CC BY-NC-ND) — all in
+  `frontend/public/images/`.
 - ~5h core build + theming iterations; compliance pass (v1 API, Alembic,
   timezone logic, JSON SSE, 9 tests, docs) on top.

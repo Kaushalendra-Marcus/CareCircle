@@ -401,8 +401,8 @@ function Hero({
         </div>
         <div className="hero-img">
           <img
-            src="/images/hero-hands.jpg"
-            alt="A family member gently holding their parent's hand in warm sunlight"
+            src="/images/family-table.jpg"
+            alt="Elderly couple smiling together at their kitchen table"
           />
         </div>
       </div>
@@ -784,7 +784,7 @@ function TodayTab(props: {
             </div>
           </article>
           <article className="trio-card">
-            <img src="/images/doctor-visit.jpg" alt="Smiling doctor during a visit" />
+            <img src="/images/bp-check.jpg" alt="Nurse checking an older patient's blood pressure" />
             <div className="trio-body">
               <h3>Appointments, together</h3>
               <p>
@@ -797,7 +797,7 @@ function TodayTab(props: {
             </div>
           </article>
           <article className="trio-card">
-            <img src="/images/telehealth.jpg" alt="Coordinating care on a laptop" />
+            <img src="/images/care-call.jpg" alt="Doctor coordinating care over the phone" />
             <div className="trio-body">
               <h3>Check-ins that count</h3>
               <p>
@@ -996,7 +996,7 @@ function FamilyTab({
   return (
     <div className="narrow">
       <section className="feature flip">
-        <img src="/images/care-call.jpg" alt="A doctor coordinating care over the phone" />
+        <img src="/images/consult.jpg" alt="Doctor in consultation with a patient" />
         <div className="feature-copy">
           <h2>One family, one place.</h2>
           <p>
