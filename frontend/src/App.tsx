@@ -722,8 +722,8 @@ function TodayTab(props: {
         <div className="aside">
           <section className="card recipient-card">
             <img
-              src="/images/senior-smile.jpg"
-              alt="Smiling older woman in a straw hat"
+              src="/images/family-cartoon.svg"
+              alt="Cartoon illustration of a grandmother, father and child holding hands"
               className="recipient-photo"
             />
             <div>
