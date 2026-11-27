@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, fmtTime, relTime, type Member, type Task, type Today } from "./api";
+import { api, fmtTime, relTime, type Member, type Recipient, type Task, type Today } from "./api";
 import { Icon } from "./icons";
 import "./styles.css";
 
@@ -46,6 +46,7 @@ export default function App() {
   const [today, setToday] = useState<Today | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [recipient, setRecipient] = useState("Mum");
+  const [recipientInfo, setRecipientInfo] = useState<Recipient | null>(null);
   const [who, setWho] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [netErr, setNetErr] = useState(false);
@@ -69,7 +70,10 @@ export default function App() {
       ]);
       setToday(t);
       setMembers(m);
-      if (r[0]) setRecipient(r[0].name);
+      if (r[0]) {
+        setRecipient(r[0].name);
+        setRecipientInfo(r[0]);
+      }
       setWho((w) => (w === null && m.length ? m[0].id : w));
       setNetErr(false);
     } catch {
@@ -140,9 +144,7 @@ export default function App() {
     <div className="site">
       <nav className="navbar">
         <span className="brand">
-          <span className="brand-mark">
-            <Icon name="activity" size={19} />
-          </span>
+          <img src="/logo.svg" alt="CareCircle logo" className="logo-img" />
           CareCircle
         </span>
         <div className="topnav">
@@ -223,6 +225,7 @@ export default function App() {
               counts={counts}
               meds={meds}
               members={members}
+              recipientInfo={recipientInfo}
               who={who}
               setWho={setWho}
               take={take}
@@ -232,6 +235,8 @@ export default function App() {
               onEdit={(t) => setSheet({ editing: t })}
               reload={load}
               say={say}
+              go={go}
+              onAdd={() => setSheet({})}
             />
           )}
           {tab === "meds" && <MedsTab today={today} take={take} later={later} remove={remove} onEdit={(t) => setSheet({ editing: t })} />}
@@ -268,9 +273,7 @@ export default function App() {
         <div className="foot-grid">
           <div>
             <div className="foot-brand">
-              <span className="brand-mark" style={{ width: 26, height: 26 }}>
-                <Icon name="activity" size={15} />
-              </span>
+              <img src="/logo.svg" alt="CareCircle logo" className="logo-img sm" />
               CareCircle
             </div>
             <p className="foot-tag">Care is easier when everyone is in the loop.</p>
@@ -604,6 +607,7 @@ function TodayTab(props: {
   counts: { overdue: number; pending: number; completed: number; total: number };
   meds: Task[];
   members: Member[];
+  recipientInfo: Recipient | null;
   who: number | null;
   setWho: (id: number) => void;
   take: (t: Task) => void;
@@ -613,8 +617,10 @@ function TodayTab(props: {
   onEdit: (t: Task) => void;
   reload: () => void;
   say: (m: string) => void;
+  go: (t: Tab) => void;
+  onAdd: () => void;
 }) {
-  const { today, counts, meds, members, who, setWho, take, later, undo, remove, onEdit, reload, say } = props;
+  const { today, counts, meds, members, recipientInfo, who, setWho, take, later, undo, remove, onEdit, reload, say, go, onAdd } = props;
   const others = useMemo(
     () =>
       [...(today?.overdue ?? []), ...(today?.due ?? [])].filter(
@@ -695,6 +701,23 @@ function TodayTab(props: {
         </div>
 
         <div className="aside">
+          <section className="card recipient-card">
+            <img
+              src="/images/senior-smile.jpg"
+              alt="Smiling older woman in a straw hat"
+              className="recipient-photo"
+            />
+            <div>
+              <div className="prog-label">Caring for {recipientInfo?.name ?? "Mum"}</div>
+              <div className="med-meta">
+                {recipientInfo?.timezone ? `Timezone ${recipientInfo.timezone}` : "Family care circle"}
+                {recipientInfo?.notes ? ` · ${recipientInfo.notes}` : ""}
+              </div>
+              <div className="med-meta">
+                {members.map((m) => m.name).join(" · ") || "Add family to begin"}
+              </div>
+            </div>
+          </section>
           <ProgressCard counts={counts} />
           <div className="sec-head">
             <h2>
@@ -717,6 +740,75 @@ function TodayTab(props: {
           <AskBox say={say} />
         </div>
       </div>
+
+      <section className="page-sec">
+        <p className="hero-eyebrow">WHY CARECIRCLE</p>
+        <h2 className="sec-title">Everything the family juggles, in one calm place.</h2>
+        <p className="sec-sub">
+          No more scattered WhatsApp threads and forgotten phone calls. Every
+          medicine, appointment and check-in lives here — with who did it and
+          when, visible to everyone who cares.
+        </p>
+        <div className="trio">
+          <article className="trio-card">
+            <img src="/images/meds-pills.jpg" alt="Colorful daily medication pills" />
+            <div className="trio-body">
+              <h3>Never miss a dose</h3>
+              <p>
+                Morning and evening medicines surface at the right time. Tap
+                Taken in one touch, or snooze for later — the whole family
+                sees it instantly.
+              </p>
+              <button className="text-btn" onClick={() => go("meds")}>
+                Open medications
+              </button>
+            </div>
+          </article>
+          <article className="trio-card">
+            <img src="/images/doctor-visit.jpg" alt="Smiling doctor during a visit" />
+            <div className="trio-body">
+              <h3>Appointments, together</h3>
+              <p>
+                Doctor visits carry their notes and their person. Everyone
+                knows who is taking Mum, what to carry, and what was decided.
+              </p>
+              <button className="text-btn" onClick={() => document.getElementById("plan")?.scrollIntoView({ behavior: "smooth" })}>
+                See today's plan
+              </button>
+            </div>
+          </article>
+          <article className="trio-card">
+            <img src="/images/telehealth.jpg" alt="Coordinating care on a laptop" />
+            <div className="trio-body">
+              <h3>Check-ins that count</h3>
+              <p>
+                Calls and visits become records, not memories. Ask "who did
+                the morning check-in?" and get an answer from real data — never
+                a guess.
+              </p>
+              <button className="text-btn" onClick={() => go("activity")}>
+                View activity
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section className="cta-band">
+        <div>
+          <h2>Start with today's first task.</h2>
+          <p>
+            Add the next medicine, call or visit. It takes ten seconds, and
+            the whole family stays in the loop from here on.
+          </p>
+        </div>
+        <button className="btn-light" onClick={onAdd}>
+          <span className="ic">
+            <Icon name="plus" size={16} />
+          </span>
+          Add a task
+        </button>
+      </section>
     </>
   );
 }

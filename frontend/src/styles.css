@@ -306,6 +306,58 @@ input:focus, select:focus { outline: none; border-color: var(--blue); box-shadow
   padding: 18px 0 8px; margin-top: 18px; border-top: 1px solid var(--rule);
 }
 .overdue-label { color: var(--red); }
+/* ---------- brand logo ---------- */
+.logo-img { width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0; }
+.logo-img.sm { width: 26px; height: 26px; }
+/* ---------- recipient card ---------- */
+.recipient-card { display: flex; gap: 14px; align-items: center; }
+.recipient-photo {
+  width: 76px; height: 76px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+}
+/* ---------- content sections ---------- */
+.page-sec { margin: 44px 0 8px; }
+.sec-title {
+  font-size: 32px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.1;
+  margin: 8px 0 10px; max-width: 640px;
+}
+@media (min-width: 900px) { .sec-title { font-size: 44px; } }
+.sec-sub { color: var(--muted); font-size: 17px; line-height: 1.55; max-width: 640px; margin: 0; }
+.trio { display: grid; gap: 16px; grid-template-columns: 1fr; margin-top: 22px; }
+@media (min-width: 900px) { .trio { grid-template-columns: 1fr 1fr 1fr; } }
+.trio-card {
+  background: #fff; border-radius: 28px; overflow: hidden;
+  box-shadow: var(--shadow); display: flex; flex-direction: column;
+}
+.trio-card img { width: 100%; height: 200px; object-fit: cover; }
+.trio-body { padding: 22px 22px 24px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.trio-body h3 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+.trio-body p { color: var(--muted); font-size: 15px; line-height: 1.55; margin: 0; flex: 1; }
+.text-btn {
+  border: none; background: none; cursor: pointer; padding: 0; text-align: left;
+  font-family: var(--font); font-size: 15px; font-weight: 600; color: var(--blue);
+}
+.text-btn:hover { color: var(--blue-deep); text-decoration: underline; }
+/* ---------- CTA band ---------- */
+.cta-band {
+  background: var(--ink); color: #fff; border-radius: 28px;
+  padding: 34px 30px; margin: 40px 0 8px;
+  display: flex; flex-direction: column; gap: 18px;
+  box-shadow: var(--shadow);
+}
+@media (min-width: 900px) {
+  .cta-band { flex-direction: row; align-items: center; justify-content: space-between; padding: 48px 56px; }
+}
+.cta-band h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; }
+@media (min-width: 900px) { .cta-band h2 { font-size: 36px; } }
+.cta-band p { color: #a1a1a6; font-size: 16px; margin: 0; max-width: 520px; }
+.btn-light {
+  border: none; cursor: pointer; font-family: var(--font); flex-shrink: 0;
+  background: #fff; color: var(--ink);
+  font-size: 16px; font-weight: 600; padding: 14px 32px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 8px; align-self: flex-start;
+}
+.btn-light:hover { background: var(--faint); }
+.btn-light:active { transform: scale(0.98); }
 /* ---------- toast ---------- */
 .toast {
   position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%);
