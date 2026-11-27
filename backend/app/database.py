@@ -1,11 +1,23 @@
 """Database engine / session / Base."""
 import os
+import re
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+psycopg://carecircle:carecircle@localhost:5432/carecircle",
+
+def normalize_url(url: str) -> str:
+    """Accept plain `postgresql://` URLs (default driver psycopg2, often
+    absent) by mapping them to the installed psycopg3 (`psycopg`) driver."""
+    if re.match(r"^postgresql://", url):
+        return "postgresql+psycopg://" + url[len("postgresql://") :]
+    return url
+
+
+DATABASE_URL = normalize_url(
+    os.getenv(
+        "DATABASE_URL",
+        "postgresql+psycopg://carecircle:carecircle@localhost:5432/carecircle",
+    )
 )
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
