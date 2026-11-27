@@ -152,3 +152,18 @@ def test_assistant_never_invents_completions(client, family):
     # Seed has a completed check-in by Ravi but the morning tablet is pending:
     # the answer must reflect reality, naming only real records.
     assert "Morning BP tablet" in text or "pending" in text.lower() or "overdue" in text.lower()
+
+
+def test_assistant_lists_members_and_their_tasks(client, family):
+    rid = family["id"]
+    with client.stream(
+        "POST", "/api/v1/assistant/ask",
+        json={"question": "Give me list of all family members and their tasks", "care_recipient_id": rid},
+    ) as resp:
+        text, _ = _stream_text(resp)
+    for name in ("Ravi", "Priya", "Ananya"):
+        assert name in text
+    assert "•" in text  # list form, not a wall of text
+    # Only real records: seeded done check-in by Ravi, assigned morning tablet.
+    assert "Morning check-in call" in text
+    assert "Morning BP tablet" in text

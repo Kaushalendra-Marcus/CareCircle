@@ -43,9 +43,10 @@ def _gather(db: Session, recipient_id: int | None):
     name = recipient.name if recipient else "Mum"
     tz = (recipient.timezone if recipient else None) or "UTC"
     grouped = group_today(tasks, tz=tz)
-    members = [m.name for m in db.scalars(select(FamilyMember).order_by(FamilyMember.id)).all()]
+    member_rows = db.scalars(select(FamilyMember).order_by(FamilyMember.id)).all()
+    members = [{"name": m.name, "relationship": m.relationship or ""} for m in member_rows]
     context = build_context(grouped, name, members)
-    return grouped, name, tz, context
+    return grouped, name, tz, context, members
 
 
 def _groq_answer(question: str, context: str) -> str | None:
@@ -75,16 +76,16 @@ def _groq_answer(question: str, context: str) -> str | None:
 @router.post("/ask")
 def ask(payload: AskRequest, db: Session = Depends(get_db)):
     started = time.perf_counter()
-    grouped, name, tz, context = _gather(db, payload.care_recipient_id)
+    grouped, name, tz, context, members = _gather(db, payload.care_recipient_id)
     model = "template"
     try:
         llm = _groq_answer(payload.question, context)
         if llm:
             answer, model = llm, os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
         else:
-            answer = template_answer(payload.question, grouped, name, tz)
+            answer = template_answer(payload.question, grouped, name, tz, members)
     except Exception:
-        answer = template_answer(payload.question, grouped, name, tz)
+        answer = template_answer(payload.question, grouped, name, tz, members)
 
     async def gen():
         try:
