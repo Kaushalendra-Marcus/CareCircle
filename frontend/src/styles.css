@@ -444,6 +444,8 @@ input:focus, select:focus { outline: none; border-color: var(--blue); box-shadow
 /* ---------- ask ---------- */
 .ask-row { display: flex; gap: 8px; }
 .ask-row input { flex: 1; min-width: 0; }
+.member-form { flex-wrap: wrap; }
+.member-form input { flex: 1 1 140px; }
 .ask-go {
   border: none; cursor: pointer; border-radius: 999px; padding: 0 24px;
   background: var(--cta); color: #fff;

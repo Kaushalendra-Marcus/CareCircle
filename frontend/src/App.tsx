@@ -967,6 +967,7 @@ function FamilyTab({
   go: (t: Tab) => void;
 }) {
   const [name, setName] = useState("");
+  const [relation, setRelation] = useState("");
   const doneBy = useMemo(() => {
     const m: Record<number, number> = {};
     for (const t of today?.done ?? [])
@@ -1004,21 +1005,41 @@ function FamilyTab({
             Add family member
           </span>
         </div>
-        <div className="ask-row" style={{ marginTop: 10 }}>
+        <div className="ask-row member-form" style={{ marginTop: 10 }}>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Name, e.g. Meera"
             aria-label="Family member name"
           />
+          <input
+            value={relation}
+            onChange={(e) => setRelation(e.target.value)}
+            placeholder="Relation, e.g. Daughter"
+            aria-label="Relationship to care recipient"
+            list="relation-suggestions"
+          />
+          <datalist id="relation-suggestions">
+            <option value="Son" />
+            <option value="Daughter" />
+            <option value="Husband" />
+            <option value="Wife" />
+            <option value="Brother" />
+            <option value="Sister" />
+            <option value="Father" />
+            <option value="Mother" />
+            <option value="Friend" />
+            <option value="Caregiver" />
+          </datalist>
           <button
             className="ask-go"
             onClick={async () => {
               if (!name.trim()) return;
-              await api.addMember(name.trim());
+              await api.addMember(name.trim(), undefined, relation.trim());
               setName("");
+              setRelation("");
               await reload();
-              say("Family member added.");
+              say(`Family member added${relation.trim() ? ` (${relation.trim()})` : ""}.`);
             }}
           >
             Add

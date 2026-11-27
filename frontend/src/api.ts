@@ -70,10 +70,10 @@ export const api = {
     req<Today>(`${V1}/today${recipientId ? `?care_recipient_id=${recipientId}` : ""}`),
   recipients: () => req<Recipient[]>(`${V1}/recipients`),
   members: () => req<Member[]>(`${V1}/family-members`),
-  addMember: (name: string, care_recipient_id?: number) =>
+  addMember: (name: string, care_recipient_id?: number, relationship?: string) =>
     req<Member>(`${V1}/family-members`, {
       method: "POST",
-      body: JSON.stringify({ name, care_recipient_id }),
+      body: JSON.stringify({ name, care_recipient_id, relationship: relationship || "" }),
     }),
   addTask: (t: {
     title: string;
