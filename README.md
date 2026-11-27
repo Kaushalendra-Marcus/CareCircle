@@ -41,7 +41,7 @@ Run it and open http://localhost:5173 — Today (hero + plan), Meds
 | Backend | Python, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, psycopg 3 |
 | DB | PostgreSQL 16 |
 | Streaming | SSE (`text/event-stream`), real server chunks |
-| LLM | Groq (`llama-3.1-8b-instant` default) or grounded template fallback |
+| LLM | Groq (`openai/gpt-oss-20b` default) or grounded template fallback |
 | Tests | pytest + FastAPI TestClient (SQLite) |
 | Infra | Docker Compose (db + api + web), persistent volume, healthchecks |
 
@@ -109,7 +109,7 @@ docker compose up --build
 ## 12. Environment variables
 
 See `.env.example`. `DATABASE_URL`, `SEED_DEMO=true`, `DB_HOST_PORT=5432`,
-optional `GROQ_API_KEY` + `GROQ_MODEL` (default `llama-3.1-8b-instant`).
+optional `GROQ_API_KEY` + `GROQ_MODEL` (default `openai/gpt-oss-20b`).
 Without a key the template assistant is used — still streamed, still logged.
 
 ## 13. How to run tests

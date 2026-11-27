@@ -59,7 +59,7 @@ def _groq_answer(question: str, context: str) -> str | None:
         "https://api.groq.com/openai/v1/chat/completions",
         headers={"Authorization": f"Bearer {key}"},
         json={
-            "model": os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
+            "model": os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"Question: {question}\nToday's tasks:\n{context}"},
@@ -80,7 +80,7 @@ def ask(payload: AskRequest, db: Session = Depends(get_db)):
     try:
         llm = _groq_answer(payload.question, context)
         if llm:
-            answer, model = llm, os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+            answer, model = llm, os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
         else:
             answer = template_answer(payload.question, grouped, name, tz)
     except Exception:
