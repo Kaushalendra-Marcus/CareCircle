@@ -143,10 +143,17 @@ export default function App() {
   return (
     <div className="site">
       <nav className="navbar">
-        <span className="brand">
+        <button
+          className="brand brand-btn"
+          onClick={() => {
+            go("today");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          aria-label="CareCircle home"
+        >
           <img src="/logo.svg" alt="CareCircle logo" className="logo-img" />
           CareCircle
-        </span>
+        </button>
         <div className="topnav">
           {tabs.map((t) => (
             <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => go(t.id)}>

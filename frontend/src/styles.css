@@ -57,6 +57,11 @@ body {
   white-space: nowrap; display: flex; align-items: center; gap: 9px;
   text-decoration: none; color: var(--ink);
 }
+.brand-btn {
+  border: none; background: none; cursor: pointer; font-family: var(--font);
+  padding: 4px 6px; margin: -4px -6px; border-radius: 10px;
+}
+.brand-btn:hover { background: var(--faint); }
 .brand-mark {
   width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
   background: var(--ink); color: #fff;
